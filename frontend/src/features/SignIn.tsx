@@ -28,11 +28,11 @@ export function SignIn({ expired = false }: { expired?: boolean }) {
         <div className="book-mark" aria-hidden="true">
           c.
         </div>
-        <span className="eyebrow">YOUR PRIVATE COMMONPLACE BOOK</span>
+        <span className="eyebrow">TP1367 9SEP LIS-LHR - here's to everything</span>
         <h1>
-          A home for
+          Tear me to pieces, skin to bone
           <br />
-          what stays with you.
+          Hello, welcome home.
         </h1>
         <p className="welcome-description">
           Notes, ideas, passages and little discoveries.
