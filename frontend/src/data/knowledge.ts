@@ -61,13 +61,16 @@ export async function listEntries(
   query: string,
   cursor: EntryCursor | null = null,
   signal?: AbortSignal,
+  kind: string | null = null,
 ): Promise<EntryPage> {
   const result = await rpc(
     'list_entries',
     {
       p_query: query,
+      p_kind: kind,
       p_before_created: cursor?.created_at ?? null,
       p_before_id: cursor?.id ?? null,
+      ...(cursor?.entry_date ? { p_before_date: cursor.entry_date } : {}),
       p_limit: 30,
     },
     signal,
@@ -91,6 +94,19 @@ export async function saveEntry(input: SaveEntry): Promise<Entry> {
     p_title: draft.title,
     p_body_markdown: draft.body,
     p_kind: draft.kind,
+    p_context: draft.context,
   });
   return readResponse(entrySchema, result);
+}
+
+// Discover types across every page, independently of the active search or filter.
+export async function listEntryKinds(signal?: AbortSignal): Promise<string[]> {
+  const kinds = new Set<string>();
+  let cursor: EntryCursor | null = null;
+  do {
+    const page = await listEntries('', cursor, signal);
+    for (const entry of page.items) kinds.add(entry.kind);
+    cursor = page.nextCursor;
+  } while (cursor && !signal?.aborted);
+  return [...kinds].sort((a, b) => a.localeCompare(b));
 }

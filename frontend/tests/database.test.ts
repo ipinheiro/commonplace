@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -22,6 +22,7 @@ async function save(
     title?: string;
     body?: string;
     kind?: string;
+    context?: object;
   } = {},
 ) {
   const result = await db.query<{
@@ -33,14 +34,20 @@ async function save(
       updated_at: string;
       metadata: object;
     };
-  }>('select api.save_entry($1, $2, $3, $4, $5, $6) as entry', [
-    args.request ?? randomUUID(),
-    args.id ?? randomUUID(),
-    args.version ?? null,
-    args.title ?? 'A thought',
-    args.body ?? 'Something worth keeping.',
-    args.kind ?? 'note',
-  ]);
+  }>(
+    args.context
+      ? 'select api.save_entry($1, $2, $3, $4, $5, $6, $7) as entry'
+      : 'select api.save_entry($1, $2, $3, $4, $5, $6) as entry',
+    [
+      args.request ?? randomUUID(),
+      args.id ?? randomUUID(),
+      args.version ?? null,
+      args.title ?? 'A thought',
+      args.body ?? 'Something worth keeping.',
+      args.kind ?? 'note',
+      ...(args.context ? [args.context] : []),
+    ],
+  );
   return result.rows[0].entry;
 }
 
@@ -56,19 +63,27 @@ beforeAll(async () => {
     create function auth.uid() returns uuid language sql stable as $$
       select (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid;
     $$;
+    create schema storage;
+    create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+    create table storage.objects (id uuid primary key, bucket_id text references storage.buckets(id), name text);
+    alter table storage.objects enable row level security;
+    create function storage.foldername(name text) returns text[] language sql immutable as $$
+      select string_to_array(name, '/');
+    $$;
+    grant usage on schema storage to authenticated;
+    grant select, insert, update on storage.objects to authenticated;
+    grant execute on function storage.foldername(text) to authenticated;
     grant usage on schema auth to anon, authenticated;
     grant execute on function auth.uid() to anon, authenticated;
     insert into auth.users values ('${owner}'), ('${stranger}');
   `);
-  await db.exec(
-    await readFile(
-      new URL('../../supabase/migrations/202609110001_entries.sql', import.meta.url),
-      'utf8',
-    ),
-  );
+  const migrations = new URL('../../supabase/migrations/', import.meta.url);
+  for (const file of (await readdir(migrations)).filter((file) => file.endsWith('.sql')).sort()) {
+    await db.exec(await readFile(new URL(file, migrations), 'utf8'));
+  }
 });
 beforeEach(async () => {
-  await db.exec('reset role; truncate app.entries, app.mutations;');
+  await db.exec('reset role; truncate app.entries, app.mutations, storage.objects;');
   await asUser(owner);
 });
 afterAll(async () => {
@@ -211,5 +226,151 @@ describe('private entry operations', () => {
     ).rows[0].page;
     expect(second.next_cursor).toBeNull();
     expect(new Set([...first.items, ...second.items].map((entry) => entry.id)).size).toBe(4);
+  });
+});
+
+describe('entry context and private images', () => {
+  const context = {
+    tags: ['reading', 'ideas'],
+    url: 'https://example.com/article',
+    source: 'A book, p. 42',
+    images: [],
+  };
+  it('saves and clears context, preserves other metadata, and checks retries and revisions', async () => {
+    const args = { id: randomUUID(), request: randomUUID(), context };
+    const created = await save(args);
+    expect(created.metadata).toEqual(context);
+    expect(await save(args)).toEqual(created);
+    await expect(
+      save({ ...args, context: { ...context, source: 'Different' } }),
+    ).rejects.toMatchObject({ code: 'PT409' });
+    await db.query('update app.entries set metadata=metadata || \'{"custom":true}\' where id=$1', [
+      created.id,
+    ]);
+    const cleared = await save({
+      id: created.id,
+      version: 2,
+      context: { tags: [], url: '', source: '', images: [] },
+    });
+    expect(cleared.metadata).toEqual({ custom: true, tags: [], url: '', source: '', images: [] });
+    await expect(save({ id: created.id, version: 2, context })).rejects.toMatchObject({
+      code: 'PT409',
+    });
+    const legacy = await save({ id: created.id, version: 3 });
+    expect(legacy.metadata).toEqual(cleared.metadata);
+  });
+  it('rejects malformed context and image references belonging to another owner or entry', async () => {
+    for (const invalid of [
+      { ...context, tags: [null] },
+      { ...context, url: 'javascript:alert(1)' },
+      { ...context, images: [null] },
+      {
+        ...context,
+        images: [{ name: 'photo.png', path: stranger + '/' + randomUUID() + '/' + randomUUID() }],
+      },
+    ]) {
+      await expect(save({ context: invalid })).rejects.toMatchObject({ code: '22023' });
+    }
+    const id = randomUUID();
+    const image = { name: 'photo.png', path: owner + '/' + id + '/' + randomUUID() };
+    expect((await save({ id, context: { ...context, images: [image] } })).metadata).toEqual({
+      ...context,
+      images: [image],
+    });
+  });
+  it('restricts image reads and uploads to the owner folder', async () => {
+    const id = randomUUID();
+    await db.query('insert into storage.objects values ($1, $2, $3)', [
+      id,
+      'entry-images',
+      owner + '/entry/image',
+    ]);
+    await asUser(stranger);
+    expect((await db.query('select * from storage.objects')).rows).toEqual([]);
+    await expect(
+      db.query('insert into storage.objects values ($1, $2, $3)', [
+        randomUUID(),
+        'entry-images',
+        owner + '/entry/other',
+      ]),
+    ).rejects.toMatchObject({ code: '42501' });
+    await db.query('update storage.objects set name=$1 where id=$2', [
+      stranger + '/entry/stolen',
+      id,
+    ]);
+    await asUser(owner);
+    expect(
+      (await db.query<{ name: string }>('select name from storage.objects')).rows[0].name,
+    ).toBe(owner + '/entry/image');
+  });
+});
+
+describe('original entry dates', () => {
+  const context = { tags: [], url: '', source: '', images: [] };
+  it('keeps original dates separate from timestamps and preserves them for older clients', async () => {
+    const created = await save({ context: { ...context, date: '2012-02-29' } });
+    expect(created.metadata).toHaveProperty('date', '2012-02-29');
+    const revised = await save({
+      id: created.id,
+      version: 1,
+      context: { ...context, date: '2005-12-31' },
+    });
+    expect(revised.created_at).toBe(created.created_at);
+    expect(revised.version).toBe(2);
+    const legacy = await save({ id: created.id, version: 2, context });
+    expect(legacy.metadata).toHaveProperty('date', '2005-12-31');
+    const cleared = await save({ id: created.id, version: 3, context: { ...context, date: '' } });
+    expect(cleared.metadata).toHaveProperty('date', '');
+  });
+  it('rejects impossible dates before writing an entry or receipt', async () => {
+    for (const date of ['2023-02-29', '2020-13-01', '0000-01-01', 'yesterday', null]) {
+      await expect(save({ context: { ...context, date } })).rejects.toMatchObject({
+        code: '22023',
+      });
+    }
+    expect((await db.query('select * from app.entries')).rows).toEqual([]);
+    expect((await db.query('select * from app.mutations')).rows).toEqual([]);
+  });
+  it('sorts and paginates by original date, including search, type filters and equal dates', async () => {
+    const newer = await save({
+      title: 'Imported newer',
+      kind: 'memory',
+      context: { ...context, date: '2019-05-10' },
+    });
+    const oldest = await save({
+      title: 'Imported oldest',
+      kind: 'memory',
+      context: { ...context, date: '2001-01-01' },
+    });
+    const sameDay = await save({
+      title: 'Imported same day',
+      kind: 'memory',
+      context: { ...context, date: '2019-05-10' },
+    });
+    await save({
+      title: 'Imported excluded',
+      kind: 'quote',
+      context: { ...context, date: '2020-01-01' },
+    });
+    type Page = {
+      items: { id: string }[];
+      next_cursor: { created_at: string; id: string; entry_date: string } | null;
+    };
+    const first = (
+      await db.query<{ page: Page }>(
+        "select api.list_entries(p_query => 'Imported', p_kind => 'memory', p_limit => 1) as page",
+      )
+    ).rows[0].page;
+    expect(first.items.map((entry) => entry.id)).toEqual([sameDay.id]);
+    const cursor = first.next_cursor!;
+    expect(cursor.entry_date).toBe('2019-05-10');
+    const second = (
+      await db.query<{ page: Page }>(
+        "select api.list_entries(p_query => 'Imported', p_kind => 'memory', p_before_created => $1, p_before_id => $2, p_before_date => $3) as page",
+        [cursor.created_at, cursor.id, cursor.entry_date],
+      )
+    ).rows[0].page;
+    expect(second.items.map((entry) => entry.id)).toEqual([newer.id, oldest.id]);
+    expect(second.next_cursor).toBeNull();
   });
 });

@@ -6,12 +6,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { signOut, watchSession, type Viewer } from './data/auth';
-import { listEntries } from './data/knowledge';
+import { listEntries, listEntryKinds } from './data/knowledge';
 
 vi.mock('./data/supabase', () => ({ isConfigured: true }));
 vi.mock('./data/auth', () => ({ watchSession: vi.fn(), signIn: vi.fn(), signOut: vi.fn() }));
 vi.mock('./data/knowledge', () => ({
   listEntries: vi.fn(),
+  listEntryKinds: vi.fn(),
   getEntry: vi.fn(),
   saveEntry: vi.fn(),
 }));
@@ -25,6 +26,7 @@ beforeEach(() => {
     return () => {};
   });
   vi.mocked(listEntries).mockResolvedValue({ items: [], nextCursor: null });
+  vi.mocked(listEntryKinds).mockResolvedValue([]);
   vi.mocked(signOut).mockResolvedValue();
 });
 afterEach(cleanup);

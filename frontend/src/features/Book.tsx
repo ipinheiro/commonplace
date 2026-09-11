@@ -1,10 +1,13 @@
+import { labelColor } from './labelColors';
 import { useEffect, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Markdown from 'react-markdown';
 import type { Viewer } from '../data/auth';
-import { getEntry, listEntries } from '../data/knowledge';
-import { DataError, type Entry, type EntryCursor } from '../domain/entries';
+import { getEntry, listEntries, listEntryKinds } from '../data/knowledge';
+import { DataError, entryDate, type Entry, type EntryCursor } from '../domain/entries';
 import { Editor } from './Editor';
+import { ThemeToggle } from './ThemeToggle';
+import { EntryContextDetails } from './EntryContextDetails';
 
 function currentEntry(): string | null {
   const match = /^#entry\/([a-f0-9-]{36})$/.exec(window.location.hash);
@@ -15,6 +18,7 @@ function formatDate(value: string): string {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    ...(value.length === 10 ? { timeZone: 'UTC' } : {}),
   }).format(new Date(value));
 }
 
@@ -32,9 +36,15 @@ export function Book({
   const client = useQueryClient();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
+  const [kind, setKind] = useState<string | null>(null);
   const [selected, setSelected] = useState(currentEntry);
-  const [editor, setEditor] = useState<{ entry: Entry | null } | null>(null);
+  const [editor, setEditor] = useState<{ entry: Entry | null; kind?: string } | null>(null);
   const [savedMessage, setSavedMessage] = useState('');
+  useEffect(() => {
+    if (!savedMessage) return;
+    const timeout = setTimeout(() => setSavedMessage(''), 4000);
+    return () => clearTimeout(timeout);
+  }, [savedMessage]);
   useEffect(() => {
     const timeout = setTimeout(() => setSearch(query), 250);
     return () => clearTimeout(timeout);
@@ -64,11 +74,21 @@ export function Book({
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
   }, [active, editor]);
+  const types = useQuery({
+    queryKey: ['entry-types', viewer.id],
+    enabled: active,
+    queryFn: ({ signal }) => listEntryKinds(signal),
+  });
+  function selectKind(next: string | null) {
+    setKind(next);
+    setSelected(null);
+    window.location.hash = '';
+  }
   const entries = useInfiniteQuery({
-    queryKey: ['entries', viewer.id, search],
+    queryKey: ['entries', viewer.id, search, kind],
     enabled: active,
     initialPageParam: null as EntryCursor | null,
-    queryFn: ({ pageParam, signal }) => listEntries(search, pageParam, signal),
+    queryFn: ({ pageParam, signal }) => listEntries(search, pageParam, signal, kind),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   const detail = useQuery({
@@ -78,7 +98,12 @@ export function Book({
   });
   function onSaved(entry: Entry) {
     setEditor(null);
-    setSavedMessage('Safely tucked into your book.');
+    setSavedMessage('Entry saved.');
+    if (kind !== null) setKind(entry.kind);
+    client.setQueryData<string[]>(['entry-types', viewer.id], (previous = []) =>
+      [...new Set([...previous, entry.kind])].sort((a, b) => a.localeCompare(b)),
+    );
+    void client.invalidateQueries({ queryKey: ['entry-types', viewer.id] });
     client.setQueryData(['entry', viewer.id, entry.id], entry);
     void client.invalidateQueries({ queryKey: ['entries', viewer.id] });
     window.location.hash = `entry/${entry.id}`;
@@ -88,7 +113,7 @@ export function Book({
     <div className="book-layout">
       <aside className="sidebar">
         <a className="brand" href="#">
-          <span className="mini-mark">c.</span> commonplace<span className="brand-dot">*</span>
+          <span className="mini-mark">c.</span> commonplace
         </a>
         <p className="sidebar-note">
           A collection of things
@@ -99,11 +124,26 @@ export function Book({
           <span>＋ New entry</span>
           <kbd>N</kbd>
         </button>
-        <nav aria-label="Book navigation">
-          <a className="nav-item active" href="#">
-            <span aria-hidden="true">▤</span> All entries
-          </a>
-        </nav>
+        {Boolean(types.data?.length) && (
+          <nav className="capture-types" aria-label="Create an entry by type">
+            <span className="eyebrow">Quick capture</span>
+            {types.data?.map((entryKind) => (
+              <button
+                key={entryKind}
+                className="capture-type"
+                data-color={labelColor(entryKind, 'entry')}
+                aria-label={`New ${entryKind}`}
+                onClick={() => setEditor({ entry: null, kind: entryKind })}
+              >
+                <span className="capture-type-dot" aria-hidden="true" />
+                <span>{entryKind.charAt(0).toLocaleUpperCase() + entryKind.slice(1)}</span>
+                <span className="capture-type-plus" aria-hidden="true">
+                  +
+                </span>
+              </button>
+            ))}
+          </nav>
+        )}
         <div className="sidebar-bottom">
           <span className="eyebrow">A BOOK OF YOUR OWN</span>
           <p className="small">{viewer.email}</p>
@@ -114,77 +154,78 @@ export function Book({
       </aside>
       <main className="book-main">
         <header className="page-top">
-          <span className="eyebrow">COLLECT · CONSIDER · RETURN</span>
-          <span className="private-label">
-            <span aria-hidden="true">◌</span> Private
-          </span>
+          <span className="eyebrow">Astra inclinant sed non obligant</span>
+          <div className="top-right">
+            <span className="private-label">
+              <span aria-hidden="true">◌</span> Private
+            </span>
+            <ThemeToggle />
+          </div>
         </header>
+        <nav className="entry-type-tabs" aria-label="Entry types">
+          {[null, ...new Set([...(types.data ?? []), ...(kind ? [kind] : [])])].map((entryKind) => (
+            <button
+              key={entryKind ?? '__all'}
+              className="entry-type-tab"
+              data-color={entryKind === null ? undefined : labelColor(entryKind, 'entry')}
+              aria-pressed={kind === entryKind}
+              onClick={() => selectKind(entryKind)}
+            >
+              {entryKind === null
+                ? 'All entries'
+                : entryKind.charAt(0).toLocaleUpperCase() + entryKind.slice(1)}
+            </button>
+          ))}
+          {types.isPending && (
+            <span className="small muted" role="status">
+              Loading types…
+            </span>
+          )}
+          {types.error && (
+            <button className="text-button" onClick={() => void types.refetch()}>
+              Retry loading types
+            </button>
+          )}
+        </nav>
         {savedMessage && (
           <p className="save-status" role="status">
             {savedMessage}
           </p>
         )}
-        {selected ? (
-          <>
-            <a href="#" className="back-link">
-              ← Back to your book
-            </a>
-            {detail.isPending && <p role="status">Opening entry…</p>}
-            {detail.error && (
-              <div className="notice error" role="alert">
-                <p>{detail.error.message}</p>
-                {detail.error instanceof DataError && detail.error.code === 'auth' && (
-                  <button onClick={onReauthenticate}>Sign in again</button>
-                )}
-                <button onClick={() => void detail.refetch()}>Try again</button>
-              </div>
-            )}
-            {detail.data && (
-              <article className={`entry-detail kind-${detail.data.kind}`}>
-                <div className="entry-meta">
-                  <span className="type-label">{detail.data.kind}</span>
-                  <span>{formatDate(detail.data.createdAt)}</span>
-                </div>
-                <h1>{detail.data.title}</h1>
-                <div className="markdown">
-                  <Markdown skipHtml>{detail.data.body}</Markdown>
-                </div>
-                <footer className="entry-footer">
-                  <span className="muted small">Updated {formatDate(detail.data.updatedAt)}</span>
-                  <button className="secondary" onClick={() => setEditor({ entry: detail.data! })}>
-                    Edit entry
-                  </button>
-                </footer>
-              </article>
-            )}
-          </>
-        ) : (
-          <>
+        <div className={selected ? 'workspace has-selection' : 'workspace'}>
+          <section className="library" aria-label="Your entries">
             <div className="page-heading">
               <div>
                 <h1>Your commonplace.</h1>
                 <p>A little of everything that matters to you.</p>
               </div>
-              <span className="flourish" aria-hidden="true">
-                ✳
-              </span>
             </div>
             <label className="search-box">
               <span aria-hidden="true">⌕</span>
               <input
                 aria-label="Search your book"
-                placeholder="Find a thought, a phrase, a possibility…"
+                placeholder="Search titles and entries…"
                 maxLength={500}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
-              <span className="small muted">Search</span>
+              {query && (
+                <button
+                  type="button"
+                  className="clear-search"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setQuery('');
+                    setSearch('');
+                  }}
+                >
+                  ×
+                </button>
+              )}
             </label>
             <div className="section-label">
-              <span className="eyebrow">
-                {search ? 'FOUND IN YOUR BOOK' : 'RECENTLY COLLECTED'}
-              </span>
-              <span className="small muted">Newest first</span>
+              <span className="eyebrow">{search ? 'FOUND IN YOUR BOOK' : 'YOUR ENTRIES'}</span>
+              <span className="small muted">By entry date · Newest first</span>
             </div>
             {entries.isPending && <p role="status">Opening your book…</p>}
             {entries.error && (
@@ -201,13 +242,15 @@ export function Book({
                 <span className="empty-art" aria-hidden="true">
                   ❧
                 </span>
-                <h2>{search ? 'Nothing here just yet.' : 'Every collection starts somewhere.'}</h2>
+                <h2>
+                  {search || kind ? 'No matching entries.' : 'Every collection starts somewhere.'}
+                </h2>
                 <p>
-                  {search
-                    ? 'Try a different word or phrase.'
+                  {search || kind
+                    ? 'Try another search or entry type.'
                     : 'A sentence from a book. An idea on your walk.\nGive the first one a home.'}
                 </p>
-                {!search && (
+                {!search && !kind && (
                   <button className="secondary" onClick={() => setEditor({ entry: null })}>
                     Keep your first entry ↗
                   </button>
@@ -218,14 +261,17 @@ export function Book({
               {items.map((entry) => (
                 <a
                   className={`entry-card kind-${entry.kind}`}
+                  aria-current={selected === entry.id ? 'true' : undefined}
                   href={`#entry/${entry.id}`}
                   key={entry.id}
                 >
                   <div className="entry-meta">
-                    <span className="type-label">{entry.kind}</span>
-                    <span>{formatDate(entry.createdAt)}</span>
+                    <span className="type-label" data-color={labelColor(entry.kind, 'entry')}>
+                      {entry.kind}
+                    </span>
+                    <time dateTime={entryDate(entry)}>{formatDate(entryDate(entry))}</time>
                   </div>
-                  <h2>{entry.title}</h2>
+                  <h2 className="entry-title">{entry.title}</h2>
                   <p>
                     {entry.body.slice(0, 230)}
                     {entry.body.length > 230 ? '…' : ''}
@@ -245,13 +291,90 @@ export function Book({
                 {entries.isFetchingNextPage ? 'Loading…' : 'A little further back'}
               </button>
             )}
-          </>
-        )}
-        <footer className="page-footer">There is room for all of it.</footer>
+          </section>
+          <section className="reader" aria-label="Entry reader">
+            {selected ? (
+              <>
+                <a href="#" className="back-link">
+                  ← Back to your book
+                </a>
+                {detail.isPending && <p role="status">Opening entry…</p>}
+                {detail.error && (
+                  <div className="notice error" role="alert">
+                    <p>{detail.error.message}</p>
+                    {detail.error instanceof DataError && detail.error.code === 'auth' && (
+                      <button onClick={onReauthenticate}>Sign in again</button>
+                    )}
+                    <button onClick={() => void detail.refetch()}>Try again</button>
+                  </div>
+                )}
+                {detail.data && (
+                  <article className={`entry-detail kind-${detail.data.kind}`}>
+                    <div className="entry-meta">
+                      <span
+                        className="type-label"
+                        data-color={labelColor(detail.data.kind, 'entry')}
+                      >
+                        {detail.data.kind}
+                      </span>
+                      <time dateTime={entryDate(detail.data)}>
+                        {formatDate(entryDate(detail.data))}
+                      </time>
+                    </div>
+                    <h1>{detail.data.title}</h1>
+                    <div className="markdown">
+                      <Markdown skipHtml>{detail.data.body}</Markdown>
+                    </div>
+                    <EntryContextDetails metadata={detail.data.metadata} />
+                    <footer className="entry-footer">
+                      <span className="muted small">
+                        Added {formatDate(detail.data.createdAt)} · Updated{' '}
+                        {formatDate(detail.data.updatedAt)}
+                      </span>
+                      <button
+                        className="secondary"
+                        onClick={() => setEditor({ entry: detail.data! })}
+                      >
+                        Edit entry
+                      </button>
+                    </footer>
+                  </article>
+                )}
+              </>
+            ) : (
+              <div className="reader-empty">
+                <span className="eyebrow">A collection of your own</span>
+                <div className="paper-symbol" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <h2 className="display">
+                  Keep a thought.
+                  <br />
+                  Make room for the next.
+                </h2>
+                <p>
+                  Choose an entry to revisit, or capture
+                  <br />
+                  something you want to remember.
+                </p>
+                <button className="secondary" onClick={() => setEditor({ entry: null })}>
+                  Write an entry <span aria-hidden="true">↗</span>
+                </button>
+                <span className="small muted">
+                  Press <kbd>N</kbd> to start writing
+                </span>
+              </div>
+            )}
+          </section>
+        </div>
       </main>
       {editor && (
         <Editor
           entry={editor.entry}
+          initialKind={editor.kind}
+          availableKinds={types.data}
           active={active}
           onReauthenticate={onReauthenticate}
           onSaved={onSaved}
