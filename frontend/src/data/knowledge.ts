@@ -5,6 +5,7 @@ import {
   entrySchema,
   pageSchema,
   type Entry,
+  type Space,
   type EntryCursor,
   type EntryPage,
   type SaveEntry,
@@ -62,11 +63,13 @@ export async function listEntries(
   cursor: EntryCursor | null = null,
   signal?: AbortSignal,
   kind: string | null = null,
+  space: Space = 'personal',
 ): Promise<EntryPage> {
   const result = await rpc(
     'list_entries',
     {
       p_query: query,
+      p_space: space,
       p_kind: kind,
       p_before_created: cursor?.created_at ?? null,
       p_before_id: cursor?.id ?? null,
@@ -100,11 +103,14 @@ export async function saveEntry(input: SaveEntry): Promise<Entry> {
 }
 
 // Discover types across every page, independently of the active search or filter.
-export async function listEntryKinds(signal?: AbortSignal): Promise<string[]> {
+export async function listEntryKinds(
+  signal?: AbortSignal,
+  space: Space = 'personal',
+): Promise<string[]> {
   const kinds = new Set<string>();
   let cursor: EntryCursor | null = null;
   do {
-    const page = await listEntries('', cursor, signal);
+    const page = await listEntries('', cursor, signal, null, space);
     for (const entry of page.items) kinds.add(entry.kind);
     cursor = page.nextCursor;
   } while (cursor && !signal?.aborted);

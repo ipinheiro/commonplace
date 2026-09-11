@@ -5,6 +5,7 @@ import {
   draftSchema,
   entryContext,
   type Entry,
+  type Space,
   type EntryDraft,
   type EntryImage as ImageRecord,
   type SaveEntry,
@@ -18,6 +19,7 @@ import { uploadImage, imageTypes, maxImageBytes } from '../data/images';
 type Props = {
   entry: Entry | null;
   initialKind?: string;
+  initialSpace?: Space;
   availableKinds?: string[];
   onSaved: (entry: Entry) => void;
   onClose: () => void;
@@ -28,6 +30,7 @@ type Props = {
 export function Editor({
   entry,
   initialKind = 'note',
+  initialSpace = 'personal',
   availableKinds = [],
   onSaved,
   onClose,
@@ -42,7 +45,7 @@ export function Editor({
           kind: entry.kind,
           context: entryContext(entry.metadata),
         }
-      : { title: '', body: '', kind: initialKind, context: entryContext({}) },
+      : { title: '', body: '', kind: initialKind, context: entryContext({ space: initialSpace }) },
   );
   const [tagInput, setTagInput] = useState('');
   const [pendingImages, setPendingImages] = useState<{ id: string; file: File; url: string }[]>([]);
@@ -70,7 +73,8 @@ export function Editor({
     draft.kind !== (entry?.kind ?? initialKind) ||
     tagInput.trim() !== '' ||
     pendingImages.length > 0 ||
-    JSON.stringify(draft.context) !== JSON.stringify(entryContext(entry?.metadata ?? {}));
+    JSON.stringify(draft.context) !==
+      JSON.stringify(entryContext(entry?.metadata ?? { space: initialSpace }));
 
   useEffect(() => {
     const preventLoss = (event: BeforeUnloadEvent) => {
@@ -187,7 +191,16 @@ export function Editor({
   return (
     <div className="modal-backdrop">
       <aside className="editor-illustration" aria-hidden="true">
-        <img src="/illustrations/witchy-commonplace.png" alt="" width="1254" height="1254" />
+        <img
+          src={
+            draft.context.space === 'work'
+              ? '/illustrations/witchy-work.png'
+              : '/illustrations/witchy-commonplace.png'
+          }
+          alt=""
+          width="1254"
+          height="1254"
+        />
       </aside>
       <section
         ref={modal}
@@ -203,7 +216,7 @@ export function Editor({
           if (event.key === 'Tab') {
             const controls = Array.from(
               modal.current?.querySelectorAll<HTMLElement>(
-                'button:not(:disabled), input:not(:disabled), textarea:not(:disabled):not([hidden]), a[href]',
+                'button:not(:disabled), select:not(:disabled), input:not(:disabled), textarea:not(:disabled):not([hidden]), a[href]',
               ) ?? [],
             ).filter((element) => !element.closest('fieldset:disabled'));
             const first = controls[0];
@@ -233,6 +246,20 @@ export function Editor({
         <h2 id="editor-heading">{entry ? 'Return to a thought.' : 'Something worth keeping.'}</h2>
         <form onSubmit={submit}>
           <fieldset disabled={saving || uncertain}>
+            <label htmlFor="entry-space">Space</label>
+            <select
+              id="entry-space"
+              value={draft.context.space}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  context: { ...draft.context, space: event.target.value as Space },
+                })
+              }
+            >
+              <option value="personal">Personal</option>
+              <option value="work">Work</option>
+            </select>
             <label htmlFor="entry-kind">Entry type</label>
             <input
               id="entry-kind"
