@@ -23,6 +23,20 @@ node frontend/scripts/check-connection.mjs
 
 Expected: Auth HTTP 200, registration disabled, `api` anonymous access denied with `42501`, and `app` unexposed with `PGRST106`. This check is read-only and does not print credentials. It does not prove authenticated save behaviour; complete the walkthrough below.
 
+### If the API disagrees with the dashboard
+
+If the dashboard shows only `api` but requests return `PGRST106` listing `public, graphql_public`, the running API configuration differs from the dashboard. Supabase documents [resetting or explicitly setting the authenticator schema configuration](https://supabase.com/docs/guides/troubleshooting/pgrst106-the-schema-must-be-one-of-the-following-error-when-querying-an-exposed-schema).
+
+For this project's initial hosted setup, resetting `pgrst.db_schemas` and reloading did not resolve the mismatch. The connection check passed after running this in the SQL Editor:
+
+```sql
+ALTER ROLE authenticator SET pgrst.db_schemas = 'api';
+NOTIFY pgrst, 'reload config';
+NOTIFY pgrst, 'reload schema';
+```
+
+This is an explicit database role override. Keep it aligned with the dashboard if exposed schemas change in future. It does not modify entries. Rerun the connection check after changing it.
+
 ## 2. Run locally
 
 Use a current Node release compatible with the locked Vite version (Node 24 was used here).
