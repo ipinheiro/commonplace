@@ -186,6 +186,9 @@ export function Editor({
 
   return (
     <div className="modal-backdrop">
+      <aside className="editor-illustration" aria-hidden="true">
+        <img src="/illustrations/witchy-commonplace.png" alt="" width="1254" height="1254" />
+      </aside>
       <section
         ref={modal}
         className="editor modal"

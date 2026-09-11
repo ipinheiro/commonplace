@@ -344,11 +344,13 @@ export function Book({
             ) : (
               <div className="reader-empty">
                 <span className="eyebrow">A collection of your own</span>
-                <div className="paper-symbol" aria-hidden="true">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
+                <img
+                  className="collection-illustration"
+                  src="/illustrations/witchy-commonplace.png"
+                  alt="A sleeping black cat curled around an open notebook, with herbs and a golden crescent moon."
+                  width="1254"
+                  height="1254"
+                />
                 <h2 className="display">
                   Keep a thought.
                   <br />
