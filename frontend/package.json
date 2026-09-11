@@ -11,7 +11,8 @@
     "typecheck": "tsc -b",
     "format": "prettier --write src tests scripts *.json *.ts index.html",
     "format:check": "prettier --check src tests scripts *.json *.ts index.html",
-    "check:connection": "node scripts/check-connection.mjs"
+    "check:connection": "node scripts/check-connection.mjs",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",
