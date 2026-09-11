@@ -1,7 +1,7 @@
 # Commonplace book - design
 
 Date: 2026-08-27
-Status: approved design, pre-implementation
+Status: historical filesystem-first design; partially implemented, then paused on 2026-09-11. The user's updated direction is a hosted, database-first web/PWA app. See the [architecture review and migration proposal](../../plans/2026-09-11-hosted-commonplace-design.md).
 
 ## What this is
 
@@ -9,17 +9,17 @@ A self-hosted, whole-life commonplace book: one place for notes, ideas, quotes a
 
 Three motions are first-class and equal:
 
-- **Quick capture** - jot an entry in seconds from the terminal, a Claude session, or a phone, then get back to what you were doing
+- **Quick capture** - jot an entry in seconds from the terminal, a Codex or Claude session, or a phone, then get back to what you were doing
 - **A place to think** - browse, connect, and wander between entries like a garden
-- **Claude as reader and writer** - any Claude session can search, cite, and file into the book
+- **AI agents as readers and writers** - Codex and Claude are equally supported clients; either can search, cite, and file into the same book
 
-"Memory" means four things, all in scope: finding things again (full-text and semantic search), connecting things (wiki-links, backlinks, tags, graph), resurfacing things (a daily digest, related entries in the margin), and Claude remembering it (MCP).
+"Memory" means four things, all in scope: finding things again (full-text and semantic search), connecting things (wiki-links, backlinks, tags, graph), resurfacing things (a daily digest, related entries in the margin), and making that memory available to AI agents across sessions (MCP). The shared memory lives in the vault, independently of any agent's conversation history or provider.
 
 Surfaces: this dev machine, other computers, and a phone. Phone access implies a small self-hosted server reachable over Tailscale.
 
 ## Architecture in one paragraph
 
-Plain markdown files in a git repository are the single source of truth (the vault). A SQLite index - full-text, links, and embeddings - is a disposable cache over the files, always rebuildable. One Python core library owns parsing, writing, indexing, and search; three thin surfaces wrap it: a FastAPI web server with a React frontend, a typer CLI (`cb`), and an MCP server for Claude. Git provides sync, history, and backup.
+Plain markdown files in a git repository are the single source of truth (the vault). A SQLite index - full-text, links, and embeddings - is a disposable cache over the files, always rebuildable. One Python core library owns parsing, writing, indexing, and search; three thin surfaces wrap it: a FastAPI web server with a React frontend, a typer CLI (`cb`), and an MCP server shared by Codex, Claude, and other compatible clients. Git provides sync, history, and backup.
 
 ## The vault
 
@@ -62,7 +62,7 @@ targeting the filename stem, e.g. [[2026-08-12-kalman-quote]].
 - Tags carry the personal/professional divide (`knitting`, `work`, `ml`). No structural separation between life and work; filtering by tag provides any "view".
 - **Attachments**: binary files live in `assets/YYYY/MM/`, referenced from entries with ordinary relative markdown links so images render in any markdown tool. Capture flows must handle attachments, especially photo capture from the phone. Plain git is fine for images at personal scale; git-lfs is a later option if needed.
 
-Two deliberate properties: the vault is fully usable with zero software (grep, cat, git log, Obsidian pointed at the folder), and any Claude session can read or write entries directly as files even without the MCP server.
+Two deliberate properties: the vault is fully usable with zero software (grep, cat, git log, Obsidian pointed at the folder), and any agent session with filesystem access to the vault can read or write entries directly as files even without the MCP server.
 
 ## The index and search layer
 
@@ -79,7 +79,7 @@ Contents:
 
 **Search is hybrid**: BM25 and vector results merged with reciprocal rank fusion. Exact words win when remembered, meaning wins when not. No reranker, no LLM in the search path.
 
-**The indexer** has two modes: full rebuild (`cb reindex`, also the recovery story) and a live file-watcher running with the server, picking up edits from any source - UI, CLI, Claude writing files directly, a git pull. A malformed file is skipped and recorded in a problems list surfaced in the UI and CLI; never a crash.
+**The indexer** has two modes: full rebuild (`cb reindex`, also the recovery story) and a live file-watcher running with the server, picking up edits from any source - UI, CLI, agents writing files directly, a git pull. A malformed file is skipped and recorded in a problems list surfaced in the UI and CLI; never a crash.
 
 Non-goal for v1: no image understanding. Photos and pattern PDFs are found through the text of the entry they are attached to.
 
@@ -92,7 +92,7 @@ commonplace/
   core/    # vault: parse/write entries, slugs, links; index: sqlite, fts, vectors, watcher; search
   api/     # FastAPI app
   cli/     # typer app (`cb`)
-  mcp/     # MCP server for Claude
+  mcp/     # shared MCP server for Codex, Claude, and other compatible clients
 ```
 
 **Core** owns parsing and writing entry files, slug generation, link extraction, indexing, and hybrid search. The three surfaces are deliberately boring wrappers so every search and every write is the same code path. All writes go through one vault-writer that composes frontmatter, picks the slug, writes the file, and updates the index synchronously; the watcher reconciles anything written behind its back.
@@ -104,6 +104,8 @@ commonplace/
 **CLI** (`cb`): `cb add quote "..." --from "Ursula K. Le Guin" --tags reading`; bare `cb add idea` opens `$EDITOR` on a template. Plus `search`, `recent`, `open`, `digest`, `reindex`, `problems`, `serve`.
 
 **MCP server**: runs locally over stdio against core directly (works even when the web server is down). Few, sharp tools: search, get entry, create entry, add link, recent, digest.
+
+Codex and Claude use the same tool contracts and vault, with client-specific connection setup documented for each. No core behaviour depends on a particular agent or provider. Phase 3 includes verifying that both clients can search, retrieve, create, and link entries through MCP; digest verification follows in phase 5. Sessions need the MCP connection or local vault access configured to use the book.
 
 **Papers absorption**: an import command converts `~/arxiv-notes/` into `papers/` entries, preserving tags; then `~/arxiv-notes` becomes a symlink into the vault so the existing arxiv MCP keeps writing new notes straight into the book. The arxiv note format is verified at implementation time and the indexer taught to read it.
 
@@ -139,7 +141,7 @@ Principle: a commonplace book you only add to is a write-only archive; the value
 
 Mechanics: computed on request (no cron, no background jobs), seeded by the date so the whole day shows one stable set across devices. The index records when each entry was last surfaced so the rotation does not repeat; that state lives in a small table that survives reindexing (losing it causes repeats, not corruption).
 
-Not in v1: spaced-repetition scheduling, LLM-written digest narratives, email/push delivery. The MCP `digest` tool is free once the digest exists, so a Claude session can open with what the book surfaced today.
+Not in v1: spaced-repetition scheduling, LLM-written digest narratives, email/push delivery. The MCP `digest` tool is free once the digest exists, so a Codex or Claude session can open with what the book surfaced today.
 
 ## Deployment, safety, testing
 
@@ -153,9 +155,9 @@ Not in v1: spaced-repetition scheduling, LLM-written digest narratives, email/pu
 
 Each phase ends with something usable:
 
-1. **Vault + core + CLI** - capture and search from the terminal; Claude can already read/write entries as files
+1. **Vault + core + CLI** - capture and search from the terminal; Codex and Claude can already read/write entries with local vault access
 2. **Papers absorbed** - import `~/arxiv-notes`, symlink so the arxiv MCP keeps feeding in
-3. **MCP server** - thin over core; every Claude session gains the book early
+3. **MCP server** - thin over core; document setup and verify shared tools in both Codex and Claude so connected sessions gain the book early
 4. **Web UI** - Claude Design pass first, then stream, capture, entry page, search
 5. **Memory** - graph views, reading shelf, digest and resurfacing
 6. **Phone** - PWA polish, Tailscale, move to its long-term home
@@ -163,6 +165,7 @@ Each phase ends with something usable:
 ## Decisions log
 
 - Files as truth, index as cache (over database-as-truth and Obsidian-as-platform)
+- Agent-independent memory; Codex and Claude are equally supported through one shared MCP interface and direct local file access
 - Absorb `~/arxiv-notes` as `papers/`; tasks are out of scope entirely (a task system may come later)
 - Types are open strings discovered from folders, not a fixed enum
 - One vault for whole life; tags separate domains, not repos
