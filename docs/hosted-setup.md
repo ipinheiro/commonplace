@@ -61,16 +61,39 @@ The test suite runs the real migration in embedded PostgreSQL with test auth inf
 
 ## 4. Deploy the frontend
 
-Choose Vercel or Cloudflare Pages and import this repository. Set:
+The production app is [commonplace-rust.vercel.app](https://commonplace-rust.vercel.app), deployed to Vercel on 2026-09-11. Set Supabase Auth's **Site URL** to `https://commonplace-rust.vercel.app`.
+
+The first deployment used the Vercel CLI from `frontend`. The production build settings contain only the Supabase URL and publishable key. GitHub automatic deployments are not connected; signing into Vercel with email works for CLI deployments. No Git push was made.
+
+To deploy an update from this already linked workspace, run the checks below, then:
+
+```sh
+npx --yes vercel@latest deploy --prod --yes --cwd frontend
+```
+
+For a fresh checkout, first sign in with `npx --yes vercel@latest login` and link the existing project with `npx --yes vercel@latest link --project commonplace --cwd frontend`, selecting the account that owns it. Local `.vercel` state and environment files stay outside Git. `.vercelignore` excludes local environment files and test artifacts from uploads; Vercel supplies the production build variables.
+
+If setting up Git-based deployment later, use:
 
 - Root directory: `frontend`
 - Build command: `npm run build`
 - Output directory: `dist`
 - Environment: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-These values are build-time configuration. Rebuild after changing them. SPA fallback configuration is included for both providers. Add the resulting HTTPS URL to Supabase Auth configuration and repeat the shared-data walkthrough. A custom domain can follow later.
+These values are build-time configuration. Rebuild after changing them. SPA fallback configuration is included for Vercel and Cloudflare Pages. Repeat the shared-data walkthrough after deployment. A custom domain can follow later.
 
-The application connects directly to the hosted Supabase API; it does not require the Python prototype or a server process on your computer. No frontend deployment has been made merely by creating these files.
+The application connects directly to the hosted Supabase API; it does not require the Python prototype or a server process on your computer.
+
+## 5. Install on your phone
+
+Open `https://commonplace-rust.vercel.app` on your phone:
+
+- **iPhone:** In Safari, open Share, choose **Add to Home Screen**, keep **Open as Web App** enabled if shown, then tap **Add**. See [Apple's instructions](https://support.apple.com/guide/iphone/iphea86e5236/ios).
+- **Android:** In Chrome, open the menu, choose **Add to home screen → Install**. See [Google's instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en).
+
+Launch the new Commonplace icon and sign in with your existing Commonplace account. Installation may use a separate browser session, so signing in again is expected. Check that your existing entry appears, save one from your phone, then refresh your computer's view to confirm it appears there too.
+
+The manifest sets the app name, icon, scope and standalone display. Browser installability is checked in a normal Chrome profile; actual phone installation still needs a device check. Installation is supported [without a service worker](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable). No service worker, offline database or persistent cache of personal API responses is installed. An internet connection is required; unsaved drafts remain in memory and can be lost when the app is closed.
 
 ## Checks
 
@@ -81,5 +104,13 @@ npm --prefix frontend run test:browser
 ```
 
 Browser checks use installed Google Chrome, start the development server when needed, and simulate Supabase responses. They cover desktop sign-in, capture, reading, editing and search, plus phone layout and capture. They do not write to the hosted database.
+
+The installation check additionally validates the served manifest, decodes the PNG icons and asks Chrome for installability errors. To run these checks against production:
+
+```sh
+PLAYWRIGHT_BASE_URL=https://commonplace-rust.vercel.app npm --prefix frontend run test:browser
+```
+
+Production verification passed all 3 browser checks on 2026-09-11. Sign-ins and saves in these automated checks use simulated API responses; the user walkthrough verifies real account access and shared entries.
 
 The old Python prototype is unfinished and is outside these frontend checks. Do not use its file-based writer as a second authoritative store for hosted content.

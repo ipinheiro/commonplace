@@ -9,14 +9,22 @@ The [hosted architecture](2026-09-11-hosted-commonplace-design.md) is the active
 - [x] Web capture, list, search and editing verified with simulated hosted responses.
 - [x] Failure/conflict and session privacy tests passed: 7 UI tests, 19 total with database tests.
 - [x] Browser and mobile viewport checks passed: 2 browser tests; production build passed.
-- [ ] Shared hosted save verified from separate browser sessions.
-- [ ] Frontend deployed for access from all devices.
+- [x] User confirmed local sign-in and hosted capture worked.
+- [x] User confirmed the saved entry appears after signing into the production app on their phone.
+- [x] Frontend deployed to https://commonplace-rust.vercel.app on Vercel.
+- [x] PWA manifest and icons implemented; all 3 browser checks passed against production, including Chrome installability.
+- [ ] User confirmed home screen installation (phone browser access already confirmed).
+- [ ] Supabase Auth Site URL updated to the production address (user step).
 
 ## Verification scope
 
-PGlite executes the application migration unchanged. Test bootstrap supplies Supabase's auth roles, user table and UID helper; it does not test Supabase Auth or PostgREST. The stale-revision tests exercise competing revisions sequentially. A live authenticated database/API pass is still required for save behaviour and independent concurrent connections.
+PGlite executes the application migration unchanged. Test bootstrap supplies Supabase's auth roles, user table and UID helper; it does not test Supabase Auth or PostgREST. The stale-revision tests exercise competing revisions sequentially. Live checks of overlapping independent connections and second-account isolation remain beyond the user's successful capture/read walkthrough.
 
-The user reports applying the hosted migration and Auth setup. The public connection probe now passes: Auth HTTP 200, registration disabled, anonymous `api` RPC access denied with HTTP 401 / `42501`, and `app` unexposed with `PGRST106`. The dashboard showed only `api` while the running API retained `public, graphql_public`. Resetting the role setting and reloading did not resolve the mismatch; the probe passed after the explicit `authenticator` schema setting and reload described in the setup guide. The browser checks use simulated API responses and do not establish live hosted save behaviour. No frontend deployment or installable PWA has been completed.
+The user reports applying the hosted migration and Auth setup. The public connection probe now passes: Auth HTTP 200, registration disabled, anonymous `api` RPC access denied with HTTP 401 / `42501`, and `app` unexposed with `PGRST106`. The dashboard showed only `api` while the running API retained `public, graphql_public`. Resetting the role setting and reloading did not resolve the mismatch; the probe passed after the explicit `authenticator` schema setting and reload described in the setup guide. The user then confirmed the local app worked with hosted data. Automated browser checks use simulated API responses and do not establish live hosted save behaviour.
+
+The user approved deployment and PWA installation next, bringing these daily-use tasks forward before knowledge relationships. Vercel production deployment `dpl_D8T8SkKNYjbwa4BT4Fr26ShKnENt` is ready and its stable HTTPS URL returns HTTP 200 without a Vercel login. The deployed frontend passed desktop, phone viewport and installability checks. Supabase sign-in still protects entries. The user confirmed signing in on their phone and seeing the previously saved entry. Actual home screen installation and saving a new entry from the phone remain device walkthrough steps. The app remains online-only, without a service worker or offline content cache.
+
+Vercel CLI uses the user's email-based account. GitHub linking was unavailable because that account has no GitHub login connection; direct CLI deployment succeeded. Automatic Git deployments are not configured. The setup guide records how to redeploy.
 
 ## Commit checkpoints
 
