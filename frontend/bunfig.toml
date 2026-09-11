@@ -1,0 +1,2 @@
+# Let Vite handle mode-specific environment files and their precedence.
+env = false

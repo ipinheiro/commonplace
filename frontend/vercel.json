@@ -1,7 +1,7 @@
 {
   "framework": "vite",
-  "buildCommand": "npm run build",
-  "installCommand": "npm ci",
+  "buildCommand": "bunx bun@1.4.2 run build",
+  "installCommand": "bunx bun@1.4.2 install --frozen-lockfile",
   "outputDirectory": "dist",
   "rewrites": [{ "source": "/((?!.*\\.).*)", "destination": "/index.html" }]
 }

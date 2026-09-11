@@ -8,11 +8,11 @@ Open [Commonplace](https://commonplace-rust.vercel.app) from your computer or ph
 
 ## Run locally
 
-Follow the [hosted setup guide](docs/hosted-setup.md) to prepare Supabase and configure `frontend/.env.local`. Then:
+Follow the [hosted setup guide](docs/hosted-setup.md) to prepare Supabase and configure `frontend/.env.local`. Install Bun 1.4.2 and Node 24, then:
 
 ```sh
-npm --prefix frontend ci
-npm --prefix frontend run dev
+bun install --cwd frontend --frozen-lockfile
+bun run --cwd frontend dev
 ```
 
 Open `http://localhost:5173`. The interface runs locally during development; saved entries live in the configured cloud database.
@@ -20,11 +20,13 @@ Open `http://localhost:5173`. The interface runs locally during development; sav
 ## Verify
 
 ```sh
-npm --prefix frontend test
-npm --prefix frontend run build
-npm --prefix frontend run test:browser
-node frontend/scripts/check-connection.mjs
+bun run --cwd frontend test
+bun run --cwd frontend build
+bun run --cwd frontend test:browser
+bun run --cwd frontend check:connection
 ```
+
+Use `bun run --cwd frontend test`, including `run`, to invoke Vitest; `bun test` invokes Bun's separate test runner.
 
 Browser tests use installed Google Chrome and simulated API responses. Database tests execute the migration in embedded PostgreSQL; neither substitutes for the live two-session walkthrough in the setup guide.
 

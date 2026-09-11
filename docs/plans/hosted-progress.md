@@ -14,6 +14,7 @@ The [hosted architecture](2026-09-11-hosted-commonplace-design.md) is the active
 - [x] Frontend deployed to https://commonplace-rust.vercel.app on Vercel.
 - [x] PWA manifest and icons implemented; all 3 browser checks passed against production, including Chrome installability.
 - [x] Removed the untracked Python prototype, package configuration, lockfile, virtual environment and generated Python artifacts; archived the original plan.
+- [x] Migrated local dependency management and scripts to Bun 1.4.2; clean installation, 19 Vitest tests, 3 browser tests, formatting and production build passed.
 - [ ] User confirmed home screen installation (phone browser access already confirmed).
 - [ ] Supabase Auth Site URL updated to the production address (user step).
 
@@ -26,6 +27,14 @@ The user reports applying the hosted migration and Auth setup. The public connec
 The user approved deployment and PWA installation next, bringing these daily-use tasks forward before knowledge relationships. Vercel production deployment `dpl_D8T8SkKNYjbwa4BT4Fr26ShKnENt` is ready and its stable HTTPS URL returns HTTP 200 without a Vercel login. The deployed frontend passed desktop, phone viewport and installability checks. Supabase sign-in still protects entries. The user confirmed signing in on their phone and seeing the previously saved entry. Actual home screen installation and saving a new entry from the phone remain device walkthrough steps. The app remains online-only, without a service worker or offline content cache.
 
 Vercel CLI uses the user's email-based account. GitHub linking was unavailable because that account has no GitHub login connection; direct CLI deployment succeeded. Automatic Git deployments are not configured. The setup guide records how to redeploy.
+
+## Bun migration verification
+
+The [Bun migration research](2026-09-11-bun-migration.md) records the tooling decisions. Bun 1.4.2 (`744846f84`) was installed with its official installer. All 252 unique package/version pairs and integrity hashes match the previous npm lockfile. A clean frozen installation succeeded; a subsequent frozen installation left `bun.lock` unchanged. No untrusted dependency scripts were reported. The temporary npm-installed dependencies and npm lockfile were removed.
+
+Node 24.21.0 still executes Vite, Vitest and Playwright through Bun's script commands. All 19 tests, the production build and formatting passed. All 3 browser checks passed with Playwright starting Vite through Bun. The read-only Supabase connection check passed through its Bun script. Bun's runtime configuration was checked to ensure it does not preload the Supabase environment variable before Vite handles environment files. The existing bundle-size warning remains.
+
+Vercel's install and build commands now select Bun 1.4.2 explicitly. Deployment `dpl_9KysUitpRfJC3nrQ1HT14rNqx6B1` was uploaded through `bunx vercel@59.16.0`, but Vercel blocked it before build verification: `TEAM_ACCESS_REQUIRED`, with the reason that the commit author lacks permission to create deployments for the project. The CLI displayed `UNKNOWN`; the API confirmed `BLOCKED` and `aliasAssigned: false`. The user needs to connect GitHub account `ipinheiro` to the existing email-based Vercel account, then retry deployment and production browser checks. The Bun migration has passed local verification; its Vercel build is not yet verified. The existing production deployment remains the last successful release.
 
 ## Commit checkpoints
 

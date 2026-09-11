@@ -18,7 +18,7 @@ The local `supabase/config.toml` records these settings for a local Supabase sta
 Check the connection and unauthenticated access from the repo root:
 
 ```sh
-node frontend/scripts/check-connection.mjs
+bun run --cwd frontend check:connection
 ```
 
 Expected: Auth HTTP 200, registration disabled, `api` anonymous access denied with `42501`, and `app` unexposed with `PGRST106`. This check is read-only and does not print credentials. It does not prove authenticated save behaviour; complete the walkthrough below.
@@ -39,12 +39,14 @@ This is an explicit database role override. Keep it aligned with the dashboard i
 
 ## 2. Run locally
 
-Use a current Node release compatible with the locked Vite version (Node 24 was used here).
+Install [Bun 1.4.2](https://bun.com/docs/installation) and Node 24. Bun manages dependencies and runs package scripts; Vite, Vitest and Playwright continue to use Node. Open a new terminal after installing Bun so its PATH is available.
 
 ```sh
-npm --prefix frontend ci
-npm --prefix frontend run dev
+bun install --cwd frontend --frozen-lockfile
+bun run --cwd frontend dev
 ```
+
+Commit `frontend/bun.lock` when dependencies change. Use `bun run --cwd frontend test` (including `run`) for Vitest; `bun test` uses a different runner. `frontend/bunfig.toml` leaves environment-file loading to Vite and the connection-check script. See the [migration research](plans/2026-09-11-bun-migration.md) for the version-pinning and compatibility decisions.
 
 Open `http://localhost:5173` and sign in with your provisioned user. Sessions persist only within the current browser tab using session storage. Explicit sign-out removes the session, query cache and open draft. A session expiry keeps an open draft in memory for the same account; signing in as another user discards it.
 
@@ -68,15 +70,18 @@ The first deployment used the Vercel CLI from `frontend`. The production build s
 To deploy an update from this already linked workspace, run the checks below, then:
 
 ```sh
-npx --yes vercel@latest deploy --prod --yes --cwd frontend
+bunx vercel@59.16.0 deploy --prod --yes --cwd frontend
 ```
 
-For a fresh checkout, first sign in with `npx --yes vercel@latest login` and link the existing project with `npx --yes vercel@latest link --project commonplace --cwd frontend`, selecting the account that owns it. Local `.vercel` state and environment files stay outside Git. `.vercelignore` excludes local environment files and test artifacts from uploads; Vercel supplies the production build variables.
+For a fresh checkout, first sign in with `bunx vercel@59.16.0 login` and link the existing project with `bunx vercel@59.16.0 link --project commonplace --cwd frontend`, selecting the account that owns it. Local `.vercel` state and environment files stay outside Git. `.vercelignore` excludes local environment files and test artifacts from uploads; Vercel supplies the production build variables.
+
+If Vercel blocks a deployment because the commit author lacks access, connect the author's GitHub account under [Vercel account authentication](https://vercel.com/account/settings/authentication). This is separate from enabling automatic Git deployments. Keep the GitHub noreply commit email. Vercel documents the [author and account access requirements](https://vercel.com/docs/deployments/troubleshoot-project-collaboration#team-configuration). During the Bun migration, CLI 59.16.0 showed this block as `UNKNOWN`; `bunx vercel@59.16.0 inspect <deployment-url> --json` exposed the actual `BLOCKED` state. Retry deployment after resolving account access.
 
 If setting up Git-based deployment later, use:
 
 - Root directory: `frontend`
-- Build command: `npm run build`
+- Install command: `bunx bun@1.4.2 install --frozen-lockfile`
+- Build command: `bunx bun@1.4.2 run build`
 - Output directory: `dist`
 - Environment: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`
 
@@ -98,9 +103,9 @@ The manifest sets the app name, icon, scope and standalone display. Browser inst
 ## Checks
 
 ```sh
-npm --prefix frontend test
-npm --prefix frontend run build
-npm --prefix frontend run test:browser
+bun run --cwd frontend test
+bun run --cwd frontend build
+bun run --cwd frontend test:browser
 ```
 
 Browser checks use installed Google Chrome, start the development server when needed, and simulate Supabase responses. They cover desktop sign-in, capture, reading, editing and search, plus phone layout and capture. They do not write to the hosted database.
@@ -108,7 +113,7 @@ Browser checks use installed Google Chrome, start the development server when ne
 The installation check additionally validates the served manifest, decodes the PNG icons and asks Chrome for installability errors. To run these checks against production:
 
 ```sh
-PLAYWRIGHT_BASE_URL=https://commonplace-rust.vercel.app npm --prefix frontend run test:browser
+PLAYWRIGHT_BASE_URL=https://commonplace-rust.vercel.app bun run --cwd frontend test:browser
 ```
 
 Production verification passed all 3 browser checks on 2026-09-11. Sign-ins and saves in these automated checks use simulated API responses; the user walkthrough verifies real account access and shared entries.
