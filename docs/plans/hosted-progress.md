@@ -1,6 +1,6 @@
 # Hosted Commonplace implementation progress
 
-The [hosted architecture](2026-09-11-hosted-commonplace-design.md) is the active plan. The earlier local Python prototype remains unfinished reference work.
+The [hosted architecture](2026-09-11-hosted-commonplace-design.md) is the active plan. The unused local Python prototype was removed on 2026-09-11 at the user's request after hosted capture and phone access were confirmed. Its original design documents remain as historical context.
 
 - [x] Direction approved; original filesystem-first plan paused.
 - [x] Entry migration with ownership, revisions, retry receipts and private SQL interface.
@@ -13,6 +13,7 @@ The [hosted architecture](2026-09-11-hosted-commonplace-design.md) is the active
 - [x] User confirmed the saved entry appears after signing into the production app on their phone.
 - [x] Frontend deployed to https://commonplace-rust.vercel.app on Vercel.
 - [x] PWA manifest and icons implemented; all 3 browser checks passed against production, including Chrome installability.
+- [x] Removed the untracked Python prototype, package configuration, lockfile, virtual environment and generated Python artifacts; archived the original plan.
 - [ ] User confirmed home screen installation (phone browser access already confirmed).
 - [ ] Supabase Auth Site URL updated to the production address (user step).
 

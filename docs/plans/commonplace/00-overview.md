@@ -1,7 +1,7 @@
 # Commonplace implementation plan
 
 Date: 2026-09-11
-Status: paused on 2026-09-11 after partial phase-1 implementation. The user has requested a hosted, database-first direction. See the [architecture review and migration proposal](../2026-09-11-hosted-commonplace-design.md) before resuming work.
+Status: archived on 2026-09-11. The partial Python prototype was removed at the user's request after the hosted app was deployed. These phase files describe the retired filesystem-first approach; their source paths are historical. Follow the [hosted architecture](../2026-09-11-hosted-commonplace-design.md) and [implementation progress](../hosted-progress.md) for current work.
 
 Based on [the design](../../superpowers/specs/2026-08-27-commonplace-book-design.md).
 

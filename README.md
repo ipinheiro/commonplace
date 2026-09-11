@@ -31,5 +31,3 @@ Browser tests use installed Google Chrome and simulated API responses. Database 
 ## Direction
 
 See the [architecture and migration plan](docs/plans/2026-09-11-hosted-commonplace-design.md) and [implementation progress](docs/plans/hosted-progress.md). Tags, entry links, sources, attachments and agent access are later steps. Drafts currently stay in memory; offline capture is not implemented.
-
-The earlier local Python prototype is unfinished reference work and is not required to run the web app.

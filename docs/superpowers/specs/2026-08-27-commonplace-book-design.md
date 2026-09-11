@@ -1,7 +1,7 @@
 # Commonplace book - design
 
 Date: 2026-08-27
-Status: historical filesystem-first design; partially implemented, then paused on 2026-09-11. The user's updated direction is a hosted, database-first web/PWA app. See the [architecture review and migration proposal](../../plans/2026-09-11-hosted-commonplace-design.md).
+Status: historical filesystem-first design; the partial Python prototype was retired and removed on 2026-09-11. The app now follows a hosted, database-first web/PWA architecture. See the [architecture review and migration proposal](../../plans/2026-09-11-hosted-commonplace-design.md).
 
 ## What this is
 

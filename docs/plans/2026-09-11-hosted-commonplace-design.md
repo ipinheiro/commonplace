@@ -11,20 +11,22 @@ Recommend Vite + React + TypeScript, TanStack Query, and a small application dat
 
 This replaces the original design's file authority, filename identity, Git synchronization, local index reconciliation and network-only authentication. The existing implementation is early enough that this is primarily a change of foundation, rather than a migration of a mature deployed product.
 
-## 1. Current implementation
+## 1. Original implementation (historical)
+
+This section records the code reviewed before the hosted implementation began. The unused Python prototype was removed on 2026-09-11 at the user's request after the hosted app was deployed. The paths below identify former files and are retained only as historical context.
 
 Reviewed the working tree, including uncommitted implementation, rather than only the single existing specification commit. There is no frontend, HTTP server, authentication, MCP server, attachment upload implementation or test suite in the current tree. Dependencies are installed and the Python package is scaffolded. The previous runtime probe verified FTS5 and sqlite-vec loading; the last lint run still had failures. End-to-end capture and real semantic retrieval have not been verified. Phase 1 is incomplete.
 
 | Area | What the code currently does | Consequence for the new direction |
 |---|---|---|
-| [CLI](../../src/commonplace/cli/app.py) | Typer commands call the Python service in-process; opens the local editor | Becomes an optional authenticated client/import tool later |
-| [Service](../../src/commonplace/core/service.py) | Constructs `Vault`, lazily constructs `Index`, uses `FileLock`, reconciles before index-backed reads | Has a useful operation vocabulary but is coupled to local persistence |
-| [Vault](../../src/commonplace/core/vault.py) | Parses YAML/Markdown, allocates filename stems, uses temp-file replacement, checks hashes | Parsing/export ideas can survive; file writes cease to be primary persistence |
-| [Models](../../src/commonplace/core/models.py) | Entries contain `slug`, `path`, `content_hash`; creation date, tags, source string and metadata | Needs UUIDs, ownership, update date, revision, sources and attachments; type validation must stop enforcing directory rules |
-| [Index](../../src/commonplace/core/index.py) | SQLite entries, tags, links, FTS5, chunks, vectors and problems; rebuild removes derived entry rows | This rebuild contract is unsafe for a canonical database and must not transfer to PostgreSQL |
-| [Search](../../src/commonplace/core/search.py) | Direct SQLite queries and cosine distances, followed by reciprocal rank fusion | Ranking concepts are reusable, SQL and execution location change |
-| [Embeddings](../../src/commonplace/core/embeddings.py) | An `Embedder` protocol and a local FastEmbed implementation with model cache | Optional future batch worker; should not be required on client devices |
-| [Configuration](../../src/commonplace/core/config.py), [watcher](../../src/commonplace/core/watcher.py) | Device paths, XDG storage, per-vault locks, continuous file reconciliation | Keep only for local tooling, remove from hosted request handling |
+| CLI (`src/commonplace/cli/app.py`) | Typer commands call the Python service in-process; opens the local editor | Becomes an optional authenticated client/import tool later |
+| Service (`src/commonplace/core/service.py`) | Constructs `Vault`, lazily constructs `Index`, uses `FileLock`, reconciles before index-backed reads | Has a useful operation vocabulary but is coupled to local persistence |
+| Vault (`src/commonplace/core/vault.py`) | Parses YAML/Markdown, allocates filename stems, uses temp-file replacement, checks hashes | Parsing/export ideas can survive; file writes cease to be primary persistence |
+| Models (`src/commonplace/core/models.py`) | Entries contain `slug`, `path`, `content_hash`; creation date, tags, source string and metadata | Needs UUIDs, ownership, update date, revision, sources and attachments; type validation must stop enforcing directory rules |
+| Index (`src/commonplace/core/index.py`) | SQLite entries, tags, links, FTS5, chunks, vectors and problems; rebuild removes derived entry rows | This rebuild contract is unsafe for a canonical database and must not transfer to PostgreSQL |
+| Search (`src/commonplace/core/search.py`) | Direct SQLite queries and cosine distances, followed by reciprocal rank fusion | Ranking concepts are reusable, SQL and execution location change |
+| Embeddings (`src/commonplace/core/embeddings.py`) | An `Embedder` protocol and a local FastEmbed implementation with model cache | Optional future batch worker; should not be required on client devices |
+| Configuration and watcher (`src/commonplace/core/config.py`, `watcher.py`) | Device paths, XDG storage, per-vault locks, continuous file reconciliation | Keep only for local tooling, remove from hosted request handling |
 
 The SQLite `document` column contains serialized entry JSON, but there is no implemented local JSON-file database. The file vault is the intended authority. PostgreSQL cannot replace `sqlite3.connect()` alone: authority, identity, authentication and save semantics all change.
 

@@ -82,7 +82,7 @@ If setting up Git-based deployment later, use:
 
 These values are build-time configuration. Rebuild after changing them. SPA fallback configuration is included for Vercel and Cloudflare Pages. Repeat the shared-data walkthrough after deployment. A custom domain can follow later.
 
-The application connects directly to the hosted Supabase API; it does not require the Python prototype or a server process on your computer.
+The application connects directly to the hosted Supabase API; it does not require a server process on your computer.
 
 ## 5. Install on your phone
 
@@ -112,5 +112,3 @@ PLAYWRIGHT_BASE_URL=https://commonplace-rust.vercel.app npm --prefix frontend ru
 ```
 
 Production verification passed all 3 browser checks on 2026-09-11. Sign-ins and saves in these automated checks use simulated API responses; the user walkthrough verifies real account access and shared entries.
-
-The old Python prototype is unfinished and is outside these frontend checks. Do not use its file-based writer as a second authoritative store for hosted content.
