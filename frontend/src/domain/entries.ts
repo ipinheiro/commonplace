@@ -33,7 +33,14 @@ export const imageSchema = z.object({
   name: z.string().min(1).max(255),
 });
 export type EntryImage = z.infer<typeof imageSchema>;
+export const spaceSchema = z.enum(['personal', 'work']);
+export type Space = z.infer<typeof spaceSchema>;
+export function entrySpace(entry: Entry): Space {
+  return spaceSchema.catch('personal').parse(entry.metadata.space);
+}
+
 export const contextSchema = z.object({
+  space: spaceSchema.default('personal'),
   date: z
     .union([z.iso.date(), z.literal('')])
     .refine((date) => !date.startsWith('0000'), 'Choose a year from 0001 to 9999.')
@@ -61,6 +68,7 @@ export function entryDate(entry: Entry): string {
 }
 export function entryContext(metadata: Record<string, unknown>): EntryContext {
   return {
+    space: spaceSchema.catch('personal').parse(metadata.space),
     date: contextSchema.shape.date.catch('').parse(metadata.date),
     tags: contextSchema.shape.tags.catch([]).parse(metadata.tags),
     url: contextSchema.shape.url.catch('').parse(metadata.url),

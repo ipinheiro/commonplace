@@ -87,6 +87,7 @@ async function fakeHostedApi(page: Page) {
         json: {
           items: entries.filter(
             (entry) =>
+              (entry.metadata.space ?? 'personal') === (body.p_space ?? 'personal') &&
               entry.title.toLowerCase().includes(String(body.p_query ?? '').toLowerCase()) &&
               (!body.p_kind || entry.kind === body.p_kind),
           ),
@@ -129,6 +130,7 @@ async function login(page: Page) {
   await page.getByLabel('Email').fill('reader@example.test');
   await page.getByLabel('Password').fill('local-test-password');
   await page.getByRole('button', { name: 'Open your book' }).click();
+  await page.getByRole('link', { name: /Open Personal/ }).click();
   await expect(page.getByRole('heading', { name: 'Your commonplace.' })).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'A thought from the morning walk' }),
@@ -378,4 +380,103 @@ test.describe('backdated entries', () => {
     await page.getByRole('button', { name: 'Save entry' }).click();
     await expect(reader.locator('time')).toHaveAttribute('datetime', '2026-09-11');
   });
+});
+
+test('welcome, work capture and moving an entry between private spaces', async ({
+  page,
+}, testInfo) => {
+  await fakeHostedApi(page);
+  await login(page);
+  await page.getByRole('link', { name: 'c. commonplace', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /A little room/ })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('welcome.png'), fullPage: true });
+  await page.getByRole('link', { name: /Open Work/ }).click();
+  await expect(page.getByRole('heading', { name: 'Your work commonplace.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'A thought from the morning walk' })).toHaveCount(
+    0,
+  );
+  await page.getByRole('button', { name: /New entry/ }).click();
+  await expect(page.getByLabel('Space', { exact: true })).toHaveValue('work');
+  await page.getByLabel('Title', { exact: true }).fill('Planning the next project');
+  await page.getByLabel('Entry type', { exact: true }).fill('meeting');
+  await page.getByRole('button', { name: /Save entry/ }).click();
+  await expect(page.getByRole('button', { name: 'Edit entry' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Your work commonplace.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit entry' }).click();
+  await page.getByLabel('Space', { exact: true }).selectOption('personal');
+  await page.getByRole('button', { name: /Save entry/ }).click();
+  await expect(page.getByRole('heading', { name: 'Your commonplace.' })).toBeVisible();
+  await page
+    .getByRole('navigation', { name: 'Your spaces' })
+    .getByRole('link', { name: 'Work', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Planning the next project' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New meeting', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('work.png'), fullPage: true });
+});
+
+for (const width of [390, 820, 1100]) {
+  test(`space switcher stays usable at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await fakeHostedApi(page);
+    await login(page);
+    const spaces = page.getByRole('navigation', { name: 'Your spaces' });
+    await expect(spaces).toBeVisible();
+    await spaces.getByRole('link', { name: 'Work', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Your work commonplace.' })).toBeVisible();
+    await expect(spaces.getByRole('link', { name: 'Work', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    );
+    await page.screenshot({ path: testInfo.outputPath('space-switcher.png'), fullPage: true });
+    await spaces.getByRole('link', { name: 'Personal', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Your commonplace.' })).toBeVisible();
+  });
+}
+
+test('Back during editing preserves the draft and navigates after closing', async ({ page }) => {
+  await fakeHostedApi(page);
+  await login(page);
+  const spaces = page.getByRole('navigation', { name: 'Your spaces' });
+  await spaces.getByRole('link', { name: 'Work', exact: true }).click();
+  await page.getByRole('button', { name: /New entry/ }).click();
+  await page.getByLabel('Title', { exact: true }).fill('Unfinished work thought');
+  await page.goBack();
+  await expect(page).toHaveURL(/#personal$/);
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Unfinished work thought');
+  await expect(page.getByLabel('Space', { exact: true })).toHaveValue('work');
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: 'Close editor' }).click();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Unfinished work thought');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Close editor' }).click();
+  await expect(page.getByRole('heading', { name: 'Your commonplace.' })).toBeVisible();
+  await spaces.getByRole('link', { name: 'Work', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Your work commonplace.' })).toBeVisible();
+  await spaces.getByRole('link', { name: 'Personal', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Your commonplace.' })).toBeVisible();
+});
+
+test('saving after Back keeps the draft in its original space', async ({ page }) => {
+  await fakeHostedApi(page);
+  await login(page);
+  const spaces = page.getByRole('navigation', { name: 'Your spaces' });
+  await spaces.getByRole('link', { name: 'Work', exact: true }).click();
+  await page.getByRole('button', { name: /New entry/ }).click();
+  await page.getByLabel('Title', { exact: true }).fill('Saved work thought');
+  await page.goBack();
+  await expect(page).toHaveURL(/#personal$/);
+  await page.getByRole('button', { name: /Save entry/ }).click();
+  await expect(page.getByRole('heading', { name: 'Your work commonplace.' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'Entry reader' })
+      .getByRole('heading', { name: 'Saved work thought' }),
+  ).toBeVisible();
+  await spaces.getByRole('link', { name: 'Personal', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Saved work thought' })).toHaveCount(0);
 });
