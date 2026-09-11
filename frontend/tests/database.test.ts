@@ -374,3 +374,52 @@ describe('original entry dates', () => {
     expect(second.next_cursor).toBeNull();
   });
 });
+
+it('separates spaces through search, pagination, moves and older saves', async () => {
+  const personal = await save({ title: 'Shared keyword personal' });
+  const context = { tags: [], url: '', source: '', images: [], space: 'work' };
+  const work = await save({ title: 'Shared keyword work', kind: 'meeting', context });
+  await save({ title: 'Shared keyword another work', context });
+  const list = async (
+    space: string,
+    cursor?: { created_at: string; id: string; entry_date: string },
+  ) => {
+    const result = await db.query<{
+      page: {
+        items: { id: string }[];
+        next_cursor: { created_at: string; id: string; entry_date: string };
+      };
+    }>(
+      'select api.list_entries(p_query => $1, p_space => $2, p_limit => 1, p_before_created => $3, p_before_id => $4, p_before_date => $5) as page',
+      [
+        'keyword',
+        space,
+        cursor?.created_at ?? null,
+        cursor?.id ?? null,
+        cursor?.entry_date ?? null,
+      ],
+    );
+    return result.rows[0].page;
+  };
+  expect((await list('personal')).items.map((e) => e.id)).toEqual([personal.id]);
+  const first = await list('work');
+  const second = await list('work', first.next_cursor);
+  expect(new Set([...first.items, ...second.items].map((e) => e.id)).size).toBe(2);
+  expect([...first.items, ...second.items].map((e) => e.id)).not.toContain(personal.id);
+  const olderSave = await save({ id: work.id, version: 1, title: 'Shared keyword updated' });
+  expect(olderSave.metadata).toMatchObject({ space: 'work' });
+  const request = randomUUID();
+  const move = { id: personal.id, version: 1, request, title: personal.title, context };
+  expect((await save(move)).version).toBe(2);
+  expect((await save(move)).version).toBe(2);
+  expect((await list('personal')).items).toEqual([]);
+  await expect(save({ ...move, context: { ...context, space: 'personal' } })).rejects.toMatchObject(
+    { code: 'PT409' },
+  );
+  await expect(save({ context: { ...context, space: 'team' } })).rejects.toMatchObject({
+    code: '22023',
+  });
+  await expect(list('team')).rejects.toMatchObject({ code: '22023' });
+  await asUser(stranger);
+  expect((await list('work')).items).toEqual([]);
+});

@@ -19,6 +19,7 @@ vi.mock('./data/knowledge', () => ({
 let changeSession: (viewer: Viewer | null) => void;
 const owner: Viewer = { id: 'owner', email: 'owner@example.test' };
 beforeEach(() => {
+  window.location.hash = 'personal';
   vi.clearAllMocks();
   vi.mocked(watchSession).mockImplementation((callback) => {
     changeSession = callback;

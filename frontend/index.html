@@ -9,15 +9,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- Font link and theme boot. Goes at the top of every page, before the
-     stylesheet. The boot script runs before any content paints: it stamps a
-     saved choice onto <html> and otherwise leaves the document un-stamped so
-     the claude.ai host or the operating system decides. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,300..700&display=swap"
-    />
+    <!-- Apply the saved theme before the page paints. -->
     <script>
       (function () {
         let saved = null;
