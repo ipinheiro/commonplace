@@ -4,7 +4,7 @@ A private, online-first personal knowledge app. A React web interface connects t
 
 The first slice supports email/password sign-in, Markdown entry capture, browsing, text search and editing. Saves include revision checks and retry receipts so stale edits produce a conflict and interrupted requests can be retried safely.
 
-Open [Commonplace](https://commonplace-rust.vercel.app) from your computer or phone. Home screen installation is supported; see the [installation instructions](docs/hosted-setup.md#5-install-on-your-phone). An internet connection is required.
+Home screen installation is supported; see the [installation instructions](docs/hosted-setup.md#5-install-on-your-phone). An internet connection is required.
 
 ## Run locally
 
