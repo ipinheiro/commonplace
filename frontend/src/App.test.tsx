@@ -42,6 +42,38 @@ function openApp() {
   return client;
 }
 
+it('renders space arrows as decorative vectors rather than emoji-capable text', async () => {
+  window.location.hash = '';
+  openApp();
+  for (const name of ['Open Personal', 'Open Work']) {
+    const link = await screen.findByRole('link', { name: new RegExp(name) });
+    expect(link).not.toHaveTextContent('↗');
+    const arrow = link.querySelector('svg');
+    expect(arrow).toHaveAttribute('aria-hidden', 'true');
+    expect(arrow).toHaveAttribute('focusable', 'false');
+  }
+});
+
+it('switches entry date ordering and starts oldest-first from the first page', async () => {
+  const user = userEvent.setup();
+  openApp();
+  const order = await screen.findByRole('combobox', { name: 'Sort by entry date' });
+  expect(order).toHaveValue('newest');
+  await user.selectOptions(order, 'oldest');
+  await waitFor(() =>
+    expect(listEntries).toHaveBeenLastCalledWith(
+      '',
+      null,
+      expect.any(AbortSignal),
+      null,
+      'personal',
+      'oldest',
+    ),
+  );
+  await user.selectOptions(order, 'newest');
+  expect(order).toHaveValue('newest');
+});
+
 it('preserves an in-memory draft across session expiry for the same owner', async () => {
   const user = userEvent.setup();
   const client = openApp();

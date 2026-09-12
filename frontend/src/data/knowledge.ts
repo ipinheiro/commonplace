@@ -64,12 +64,14 @@ export async function listEntries(
   signal?: AbortSignal,
   kind: string | null = null,
   space: Space = 'personal',
+  order: 'newest' | 'oldest' = 'newest',
 ): Promise<EntryPage> {
   const result = await rpc(
     'list_entries',
     {
       p_query: query,
       p_space: space,
+      p_order: order,
       p_kind: kind,
       p_before_created: cursor?.created_at ?? null,
       p_before_id: cursor?.id ?? null,

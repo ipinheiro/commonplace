@@ -305,6 +305,40 @@ describe('entry context and private images', () => {
   });
 });
 
+it('paginates oldest-first with stable ties and preserves search, type and space filters', async () => {
+  await asUser(owner);
+  const context = { tags: [], url: '', source: '', images: [], date: '2001-01-01', space: 'work' };
+  const first = await save({ title: 'Sorted first', context });
+  const second = await save({ title: 'Sorted second', context });
+  const newest = await save({
+    title: 'Sorted newest',
+    context: { ...context, date: '2020-01-01' },
+  });
+  await save({ title: 'Sorted personal', context: { ...context, space: 'personal' } });
+  await save({ title: 'Sorted quote', kind: 'quote', context });
+  await save({ title: 'Unrelated', context });
+  type Cursor = { created_at: string; id: string; entry_date: string };
+  type Page = { items: { id: string }[]; next_cursor: Cursor | null };
+  const ids: string[] = [];
+  let cursor: Cursor | null = null;
+  for (let page = 0; page < 3; page++) {
+    const result: Page = (
+      await db.query<{ page: Page }>(
+        "select api.list_entries(p_query => 'Sorted', p_kind => 'note', p_space => 'work', p_order => 'oldest', p_limit => 1, p_before_created => $1, p_before_id => $2, p_before_date => $3) as page",
+        [cursor?.created_at ?? null, cursor?.id ?? null, cursor?.entry_date ?? null],
+      )
+    ).rows[0].page;
+    ids.push(...result.items.map((entry) => entry.id));
+    cursor = result.next_cursor;
+    if (page < 2) expect(cursor).not.toBeNull();
+  }
+  expect(ids).toEqual([first.id, second.id, newest.id]);
+  expect(cursor).toBeNull();
+  await expect(db.query("select api.list_entries(p_order => 'invalid')")).rejects.toMatchObject({
+    code: '22023',
+  });
+});
+
 describe('original entry dates', () => {
   const context = { tags: [], url: '', source: '', images: [] };
   it('keeps original dates separate from timestamps and preserves them for older clients', async () => {

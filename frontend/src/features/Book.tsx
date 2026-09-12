@@ -1,3 +1,4 @@
+import { ArrowUpRight } from './ArrowUpRight';
 import { labelColor } from './labelColors';
 import { useEffect, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -49,6 +50,7 @@ export function Book({
   const [space, setSpace] = useState<Space | null>(currentSpace);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
+  const [order, setOrder] = useState<'newest' | 'oldest'>('newest');
   const [kind, setKind] = useState<string | null>(null);
   const [selected, setSelected] = useState(currentEntry);
   const [editor, setEditor] = useState<{ entry: Entry | null; kind?: string } | null>(null);
@@ -114,10 +116,10 @@ export function Book({
     window.location.hash = space ?? '';
   }
   const entries = useInfiniteQuery({
-    queryKey: ['entries', viewer.id, space, search, kind],
+    queryKey: ['entries', viewer.id, space, search, kind, order],
     enabled: active && Boolean(space),
     initialPageParam: null as EntryCursor | null,
-    queryFn: ({ pageParam, signal }) => listEntries(search, pageParam, signal, kind, space!),
+    queryFn: ({ pageParam, signal }) => listEntries(search, pageParam, signal, kind, space!, order),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   const detail = useQuery({
@@ -168,7 +170,7 @@ export function Book({
             <h2>Personal</h2>
             <p>Thoughts, discoveries and things worth keeping.</p>
             <span className="space-open">
-              Open Personal <span aria-hidden="true">↗</span>
+              Open Personal <ArrowUpRight />
             </span>
           </a>
           <a href="#work" className="space-card" data-space="work">
@@ -176,7 +178,7 @@ export function Book({
             <h2>Work</h2>
             <p>Notes, ideas and things to come back to at work.</p>
             <span className="space-open">
-              Open Work <span aria-hidden="true">↗</span>
+              Open Work <ArrowUpRight />
             </span>
           </a>
         </nav>
@@ -317,7 +319,19 @@ export function Book({
             </label>
             <div className="section-label">
               <span className="eyebrow">{search ? 'FOUND IN YOUR BOOK' : 'YOUR ENTRIES'}</span>
-              <span className="small muted">By entry date · Newest first</span>
+              <label className="small muted">
+                By entry date{' '}
+                <select
+                  aria-label="Sort by entry date"
+                  value={order}
+                  onChange={(event) =>
+                    setOrder(event.target.value === 'oldest' ? 'oldest' : 'newest')
+                  }
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+              </label>
             </div>
             {entries.isPending && <p role="status">Opening your book…</p>}
             {entries.error && (
@@ -344,7 +358,7 @@ export function Book({
                 </p>
                 {!search && !kind && (
                   <button className="secondary" onClick={() => setEditor({ entry: null })}>
-                    Keep your first entry ↗
+                    Keep your first entry <ArrowUpRight />
                   </button>
                 )}
               </section>
@@ -369,7 +383,7 @@ export function Book({
                     {entry.body.length > 230 ? '…' : ''}
                   </p>
                   <span className="card-arrow" aria-hidden="true">
-                    ↗
+                    <ArrowUpRight />
                   </span>
                 </a>
               ))}
@@ -380,7 +394,11 @@ export function Book({
                 disabled={entries.isFetchingNextPage}
                 onClick={() => void entries.fetchNextPage()}
               >
-                {entries.isFetchingNextPage ? 'Loading…' : 'A little further back'}
+                {entries.isFetchingNextPage
+                  ? 'Loading…'
+                  : order === 'newest'
+                    ? 'A little further back'
+                    : 'A little further forward'}
               </button>
             )}
           </section>
@@ -462,7 +480,7 @@ export function Book({
                   something you want to remember.
                 </p>
                 <button className="secondary" onClick={() => setEditor({ entry: null })}>
-                  Write an entry <span aria-hidden="true">↗</span>
+                  Write an entry <ArrowUpRight />
                 </button>
                 <span className="small muted">
                   Press <kbd>N</kbd> to start writing
