@@ -49,6 +49,7 @@ export function Book({
   const [space, setSpace] = useState<Space | null>(currentSpace);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
+  const [order, setOrder] = useState<'newest' | 'oldest'>('newest');
   const [kind, setKind] = useState<string | null>(null);
   const [selected, setSelected] = useState(currentEntry);
   const [editor, setEditor] = useState<{ entry: Entry | null; kind?: string } | null>(null);
@@ -114,10 +115,10 @@ export function Book({
     window.location.hash = space ?? '';
   }
   const entries = useInfiniteQuery({
-    queryKey: ['entries', viewer.id, space, search, kind],
+    queryKey: ['entries', viewer.id, space, search, kind, order],
     enabled: active && Boolean(space),
     initialPageParam: null as EntryCursor | null,
-    queryFn: ({ pageParam, signal }) => listEntries(search, pageParam, signal, kind, space!),
+    queryFn: ({ pageParam, signal }) => listEntries(search, pageParam, signal, kind, space!, order),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   const detail = useQuery({
@@ -317,7 +318,19 @@ export function Book({
             </label>
             <div className="section-label">
               <span className="eyebrow">{search ? 'FOUND IN YOUR BOOK' : 'YOUR ENTRIES'}</span>
-              <span className="small muted">By entry date · Newest first</span>
+              <label className="small muted">
+                By entry date{' '}
+                <select
+                  aria-label="Sort by entry date"
+                  value={order}
+                  onChange={(event) =>
+                    setOrder(event.target.value === 'oldest' ? 'oldest' : 'newest')
+                  }
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+              </label>
             </div>
             {entries.isPending && <p role="status">Opening your book…</p>}
             {entries.error && (
@@ -380,7 +393,11 @@ export function Book({
                 disabled={entries.isFetchingNextPage}
                 onClick={() => void entries.fetchNextPage()}
               >
-                {entries.isFetchingNextPage ? 'Loading…' : 'A little further back'}
+                {entries.isFetchingNextPage
+                  ? 'Loading…'
+                  : order === 'newest'
+                    ? 'A little further back'
+                    : 'A little further forward'}
               </button>
             )}
           </section>
