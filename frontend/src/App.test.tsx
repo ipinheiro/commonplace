@@ -42,6 +42,18 @@ function openApp() {
   return client;
 }
 
+it('renders space arrows as decorative vectors rather than emoji-capable text', async () => {
+  window.location.hash = '';
+  openApp();
+  for (const name of ['Open Personal', 'Open Work']) {
+    const link = await screen.findByRole('link', { name: new RegExp(name) });
+    expect(link).not.toHaveTextContent('↗');
+    const arrow = link.querySelector('svg');
+    expect(arrow).toHaveAttribute('aria-hidden', 'true');
+    expect(arrow).toHaveAttribute('focusable', 'false');
+  }
+});
+
 it('switches entry date ordering and starts oldest-first from the first page', async () => {
   const user = userEvent.setup();
   openApp();

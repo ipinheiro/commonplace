@@ -1,3 +1,4 @@
+import { ArrowUpRight } from './ArrowUpRight';
 import { labelColor } from './labelColors';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -555,8 +556,7 @@ export function Editor({
               {saving ? 'Saving to your book…' : 'Draft in this tab. Save to keep it.'}
             </span>
             <button className="primary" disabled={saving || error?.code === 'conflict'}>
-              {saving ? 'Saving…' : uncertain ? 'Retry save' : 'Save entry'}{' '}
-              <span aria-hidden="true">↗</span>
+              {saving ? 'Saving…' : uncertain ? 'Retry save' : 'Save entry'} <ArrowUpRight />
             </button>
           </div>
         </form>
