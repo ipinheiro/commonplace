@@ -63,7 +63,7 @@ The test suite runs the real migration in embedded PostgreSQL with test auth inf
 
 ## 4. Deploy the frontend
 
-The production app is [commonplace-rust.vercel.app](https://commonplace-rust.vercel.app), deployed to Vercel on 2026-09-11. Set Supabase Auth's **Site URL** to `https://commonplace-rust.vercel.app`.
+The frontend was deployed to Vercel on 2026-09-11. Set Supabase Auth's **Site URL** to your deployment's HTTPS address (for example, `https://your-app.vercel.app`).
 
 The first deployment used the Vercel CLI from `frontend`. The production build settings contain only the Supabase URL and publishable key. GitHub automatic deployments are not connected; signing into Vercel with email works for CLI deployments. No Git push was made.
 
@@ -91,7 +91,7 @@ The application connects directly to the hosted Supabase API; it does not requir
 
 ## 5. Install on your phone
 
-Open `https://commonplace-rust.vercel.app` on your phone:
+Open your deployment's HTTPS address on your phone:
 
 - **iPhone:** In Safari, open Share, choose **Add to Home Screen**, keep **Open as Web App** enabled if shown, then tap **Add**. See [Apple's instructions](https://support.apple.com/guide/iphone/iphea86e5236/ios).
 - **Android:** In Chrome, open the menu, choose **Add to home screen → Install**. See [Google's instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en).
@@ -113,7 +113,7 @@ Browser checks use installed Google Chrome, start the development server when ne
 The installation check additionally validates the served manifest, decodes the PNG icons and asks Chrome for installability errors. To run these checks against production:
 
 ```sh
-PLAYWRIGHT_BASE_URL=https://commonplace-rust.vercel.app bun run --cwd frontend test:browser
+PLAYWRIGHT_BASE_URL=https://your-app.vercel.app bun run --cwd frontend test:browser
 ```
 
 Production verification passed all 3 browser checks on 2026-09-11. Sign-ins and saves in these automated checks use simulated API responses; the user walkthrough verifies real account access and shared entries.
