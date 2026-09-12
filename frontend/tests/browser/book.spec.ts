@@ -363,20 +363,22 @@ test.describe('backdated entries', () => {
     await login(page);
     await page.getByRole('button', { name: /New entry/ }).click();
     await page.getByLabel('Title').fill('From my iPhone notes');
-    await page.getByLabel('Entry date', { exact: false }).fill('2012-02-29');
+    await page.getByLabel('Entry date · Optional', { exact: true }).fill('2012-02-29');
     await page.getByRole('button', { name: 'Save entry' }).click();
     const reader = page.getByRole('region', { name: 'Entry reader' });
     await expect(reader.locator('time')).toHaveAttribute('datetime', '2012-02-29');
     await expect(reader.locator('time')).toContainText('29');
     await page.reload();
     await page.getByRole('button', { name: 'Edit entry' }).click();
-    await expect(page.getByLabel('Entry date', { exact: false })).toHaveValue('2012-02-29');
-    await page.getByLabel('Entry date', { exact: false }).fill('2005-12-31');
+    await expect(page.getByLabel('Entry date · Optional', { exact: true })).toHaveValue(
+      '2012-02-29',
+    );
+    await page.getByLabel('Entry date · Optional', { exact: true }).fill('2005-12-31');
     await page.getByRole('button', { name: 'Save entry' }).click();
     await expect(reader.locator('time')).toHaveAttribute('datetime', '2005-12-31');
     await expect(reader.locator('time')).toContainText('31');
     await page.getByRole('button', { name: 'Edit entry' }).click();
-    await page.getByLabel('Entry date', { exact: false }).fill('');
+    await page.getByLabel('Entry date · Optional', { exact: true }).fill('');
     await page.getByRole('button', { name: 'Save entry' }).click();
     await expect(reader.locator('time')).toHaveAttribute('datetime', '2026-09-11');
   });
