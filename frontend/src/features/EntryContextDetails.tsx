@@ -1,3 +1,4 @@
+import { ArrowUpRight } from './ArrowUpRight';
 import { labelColor } from './labelColors';
 import { entryContext } from '../domain/entries';
 import { EntryImage } from './EntryImage';
@@ -40,7 +41,7 @@ export function EntryContextDetails({
           {source && <p>{source}</p>}
           {url && (
             <a href={url} target="_blank" rel="noreferrer">
-              {url} <span aria-hidden="true">↗</span>
+              {url} <ArrowUpRight />
             </a>
           )}
         </div>

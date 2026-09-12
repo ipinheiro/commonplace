@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { signIn } from '../data/auth';
+import { ArrowUpRight } from './ArrowUpRight';
 import { ThemeToggle } from './ThemeToggle';
 
 export function SignIn({ expired = false }: { expired?: boolean }) {
@@ -74,7 +75,7 @@ export function SignIn({ expired = false }: { expired?: boolean }) {
             </p>
           )}
           <button className="primary" disabled={busy}>
-            {busy ? 'Opening your book…' : 'Open your book'} <span aria-hidden="true">↗</span>
+            {busy ? 'Opening your book…' : 'Open your book'} <ArrowUpRight />
           </button>
         </form>
         <p className="small muted">A quiet space, just for you.</p>

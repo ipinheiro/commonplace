@@ -1,3 +1,4 @@
+import { ArrowUpRight } from './ArrowUpRight';
 import { labelColor } from './labelColors';
 import { useEffect, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -169,7 +170,7 @@ export function Book({
             <h2>Personal</h2>
             <p>Thoughts, discoveries and things worth keeping.</p>
             <span className="space-open">
-              Open Personal <span aria-hidden="true">↗</span>
+              Open Personal <ArrowUpRight />
             </span>
           </a>
           <a href="#work" className="space-card" data-space="work">
@@ -177,7 +178,7 @@ export function Book({
             <h2>Work</h2>
             <p>Notes, ideas and things to come back to at work.</p>
             <span className="space-open">
-              Open Work <span aria-hidden="true">↗</span>
+              Open Work <ArrowUpRight />
             </span>
           </a>
         </nav>
@@ -357,7 +358,7 @@ export function Book({
                 </p>
                 {!search && !kind && (
                   <button className="secondary" onClick={() => setEditor({ entry: null })}>
-                    Keep your first entry ↗
+                    Keep your first entry <ArrowUpRight />
                   </button>
                 )}
               </section>
@@ -382,7 +383,7 @@ export function Book({
                     {entry.body.length > 230 ? '…' : ''}
                   </p>
                   <span className="card-arrow" aria-hidden="true">
-                    ↗
+                    <ArrowUpRight />
                   </span>
                 </a>
               ))}
@@ -479,7 +480,7 @@ export function Book({
                   something you want to remember.
                 </p>
                 <button className="secondary" onClick={() => setEditor({ entry: null })}>
-                  Write an entry <span aria-hidden="true">↗</span>
+                  Write an entry <ArrowUpRight />
                 </button>
                 <span className="small muted">
                   Press <kbd>N</kbd> to start writing
