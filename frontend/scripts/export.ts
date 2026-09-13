@@ -20,8 +20,9 @@ async function loadLocalEnv(): Promise<void> {
 
 function outputDir(argv: string[]): string {
   const flag = argv.indexOf('--out');
+  const allowed = flag === -1 ? new Set<number>() : new Set([flag, flag + 1]);
   for (const [index, arg] of argv.entries()) {
-    if (index !== flag && index !== flag + 1) throw new Error('Unknown argument: ' + arg);
+    if (!allowed.has(index)) throw new Error('Unknown argument: ' + arg);
   }
   if (flag === -1) return fileURLToPath(new URL('../../export/', import.meta.url));
   const value = argv[flag + 1];
