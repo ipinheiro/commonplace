@@ -1,4 +1,4 @@
-import { access, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { cursorSchema, entryContext, entrySchema, type Space } from '../src/domain/entries.ts';
@@ -81,6 +81,16 @@ async function downloadImages(
   }
 }
 
+async function removeStaleEntries(entriesDir: string, seen: Set<string>): Promise<number> {
+  let removed = 0;
+  for (const file of await readdir(entriesDir)) {
+    if (!file.endsWith('.json') || seen.has(file.slice(0, -'.json'.length))) continue;
+    await rm(join(entriesDir, file));
+    removed += 1;
+  }
+  return removed;
+}
+
 export async function exportBook(client: ExportClient, outDir: string): Promise<ExportSummary> {
   const entriesDir = join(outDir, 'entries');
   await mkdir(entriesDir, { recursive: true });
@@ -91,7 +101,7 @@ export async function exportBook(client: ExportClient, outDir: string): Promise<
     removed: 0,
     failures: [],
   };
-
+  const seen = new Set<string>();
   const imagePaths = new Set<string>();
 
   for (const space of spaces) {
@@ -100,12 +110,22 @@ export async function exportBook(client: ExportClient, outDir: string): Promise<
         const entry = entrySchema.parse(item);
         await writeFile(join(entriesDir, entry.id + '.json'), JSON.stringify(item, null, 2) + '\n');
         summary.entries[space] += 1;
+        seen.add(entry.id);
         for (const image of entryContext(entry.metadata).images) imagePaths.add(image.path);
       }
     }
   }
 
+  summary.removed = await removeStaleEntries(entriesDir, seen);
   await downloadImages(client, outDir, imagePaths, summary);
+
+  const manifest = {
+    format: 1,
+    exported_at: new Date().toISOString(),
+    entries: summary.entries.personal + summary.entries.work,
+    images: summary.imagesDownloaded + summary.imagesSkipped,
+  };
+  await writeFile(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
   return summary;
 }

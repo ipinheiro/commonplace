@@ -179,3 +179,70 @@ describe('images', () => {
     expect(await readdir(join(outDir, 'entries'))).toEqual([entryId + '.json']);
   });
 });
+
+describe('mirroring', () => {
+  it('removes entry files absent from this run and leaves images alone', async () => {
+    const a = entry('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    const { client } = fakeClient({
+      personal: [{ items: [a], next_cursor: null }],
+      work: [{ items: [], next_cursor: null }],
+    });
+    const staleId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    await mkdir(join(outDir, 'entries'), { recursive: true });
+    await writeFile(join(outDir, 'entries', staleId + '.json'), '{}\n');
+    await mkdir(join(outDir, 'images', owner, staleId), { recursive: true });
+    await writeFile(join(outDir, 'images', owner, staleId, 'orphan'), new Uint8Array([1]));
+
+    const summary = await exportBook(client, outDir);
+
+    expect(summary.removed).toBe(1);
+    expect(await readdir(join(outDir, 'entries'))).toEqual([a.id + '.json']);
+    expect(await readdir(join(outDir, 'images', owner, staleId))).toEqual(['orphan']);
+  });
+
+  it('writes a manifest with counts and a timestamp', async () => {
+    const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const path = owner + '/' + entryId + '/dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const a = entry(entryId, { images: [{ path, name: 'photo.png' }] });
+    const b = entry('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', { space: 'work' });
+    const { client } = fakeClient(
+      {
+        personal: [{ items: [a], next_cursor: null }],
+        work: [{ items: [b], next_cursor: null }],
+      },
+      { [path]: new Uint8Array([1]) },
+    );
+    const before = Date.now();
+
+    await exportBook(client, outDir);
+
+    const manifest = JSON.parse(await readFile(join(outDir, 'manifest.json'), 'utf8'));
+    expect(manifest).toMatchObject({ format: 1, entries: 2, images: 1 });
+    expect(Date.parse(manifest.exported_at)).toBeGreaterThanOrEqual(before - 1000);
+  });
+
+  it('does not remove stale files or write a manifest when listing fails midway', async () => {
+    const a = entry('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    let call = 0;
+    const client: ExportClient = {
+      async listEntries() {
+        call += 1;
+        if (call === 1) return { items: [a], next_cursor: null };
+        throw new Error('list_entries failed: network');
+      },
+      async downloadImage() {
+        return new Uint8Array();
+      },
+    };
+    const staleId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    await mkdir(join(outDir, 'entries'), { recursive: true });
+    await writeFile(join(outDir, 'entries', staleId + '.json'), '{}\n');
+
+    await expect(exportBook(client, outDir)).rejects.toThrow('list_entries failed');
+
+    expect((await readdir(join(outDir, 'entries'))).sort()).toEqual(
+      [a.id + '.json', staleId + '.json'].sort(),
+    );
+    expect(await readdir(outDir)).not.toContain('manifest.json');
+  });
+});
