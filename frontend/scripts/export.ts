@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
-import { exportBook, type ExportClient, type ExportSummary } from './export-core.ts';
+import { exitCode, exportBook, type ExportClient, type ExportSummary } from './export-core.ts';
 
 // Mirrors check-connection.mjs: the env file is optional and never overrides the environment.
 async function loadLocalEnv(): Promise<void> {
@@ -20,6 +20,9 @@ async function loadLocalEnv(): Promise<void> {
 
 function outputDir(argv: string[]): string {
   const flag = argv.indexOf('--out');
+  for (const [index, arg] of argv.entries()) {
+    if (index !== flag && index !== flag + 1) throw new Error('Unknown argument: ' + arg);
+  }
   if (flag === -1) return fileURLToPath(new URL('../../export/', import.meta.url));
   const value = argv[flag + 1];
   if (!value || value.startsWith('--')) throw new Error('--out needs a directory.');
@@ -27,6 +30,9 @@ function outputDir(argv: string[]): string {
 }
 
 async function ask(question: string): Promise<string> {
+  if (!process.stdin.isTTY) {
+    throw new Error('Set COMMONPLACE_EMAIL when there is no terminal.');
+  }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     return (await rl.question(question)).trim();
@@ -86,7 +92,7 @@ async function main(): Promise<number> {
   await loadLocalEnv();
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) {
+  if (!url || !key || key.includes('replace_me')) {
     console.error('Configure the project URL and publishable key in frontend/.env.local first.');
     return 1;
   }
@@ -120,10 +126,15 @@ async function main(): Promise<number> {
   try {
     const summary = await exportBook(client, dir);
     report(summary, dir);
-    return summary.failures.length ? 1 : 0;
+    return exitCode(summary);
   } finally {
     await supabase.auth.signOut({ scope: 'local' });
   }
 }
 
-process.exitCode = await main();
+try {
+  process.exitCode = await main();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+}
