@@ -1,4 +1,4 @@
-import { access, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { cursorSchema, entryContext, entrySchema, type Space } from '../src/domain/entries.ts';
@@ -67,12 +67,15 @@ async function downloadImages(
       summary.imagesSkipped += 1;
       continue;
     }
+    const part = target + '.part';
     try {
       const bytes = await client.downloadImage(path);
       await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, bytes);
+      await writeFile(part, bytes);
+      await rename(part, target);
       summary.imagesDownloaded += 1;
     } catch (error) {
+      await rm(part, { force: true });
       summary.failures.push({
         path,
         message: error instanceof Error ? error.message : String(error),
@@ -116,7 +119,18 @@ export async function exportBook(client: ExportClient, outDir: string): Promise<
     }
   }
 
-  summary.removed = await removeStaleEntries(entriesDir, seen);
+  const totalEntries = summary.entries.personal + summary.entries.work;
+  if (totalEntries === 0) {
+    const existing = (await readdir(entriesDir)).filter((file) => file.endsWith('.json'));
+    if (existing.length > 0) {
+      summary.failures.push({
+        path: 'entries',
+        message: `No entries were returned; kept ${existing.length} existing entry files`,
+      });
+    }
+  } else {
+    summary.removed = await removeStaleEntries(entriesDir, seen);
+  }
   await downloadImages(client, outDir, imagePaths, summary);
 
   const manifest = {
@@ -128,4 +142,8 @@ export async function exportBook(client: ExportClient, outDir: string): Promise<
   await writeFile(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
   return summary;
+}
+
+export function exitCode(summary: ExportSummary): number {
+  return summary.failures.length ? 1 : 0;
 }

@@ -1,8 +1,13 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { exportBook, type ExportClient } from '../scripts/export-core.ts';
+import {
+  exitCode,
+  exportBook,
+  type ExportClient,
+  type ExportSummary,
+} from '../scripts/export-core.ts';
 import type { Space } from '../src/domain/entries.ts';
 
 type Image = { path: string; name: string };
@@ -155,10 +160,13 @@ describe('images', () => {
   });
 
   it('skips images already on disk and reports failed downloads without stopping', async () => {
+    const freshId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    const freshPath = owner + '/' + entryId + '/' + freshId;
     const a = entry(entryId, {
       images: [
         { path, name: 'kept.png' },
         { path: otherPath, name: 'broken.png' },
+        { path: freshPath, name: 'fresh.png' },
       ],
     });
     const { client } = fakeClient(
@@ -166,7 +174,11 @@ describe('images', () => {
         personal: [{ items: [a], next_cursor: null }],
         work: [{ items: [], next_cursor: null }],
       },
-      { [path]: new Uint8Array([9]), [otherPath]: new Error('Object not found') },
+      {
+        [path]: new Uint8Array([9]),
+        [otherPath]: new Error('Object not found'),
+        [freshPath]: new Uint8Array([7]),
+      },
     );
     await mkdir(join(outDir, 'images', owner, entryId), { recursive: true });
     await writeFile(join(outDir, 'images', owner, entryId, imageId), new Uint8Array([9]));
@@ -174,9 +186,50 @@ describe('images', () => {
     const summary = await exportBook(client, outDir);
 
     expect(summary.imagesSkipped).toBe(1);
-    expect(summary.imagesDownloaded).toBe(0);
+    expect(summary.imagesDownloaded).toBe(1);
     expect(summary.failures).toEqual([{ path: otherPath, message: 'Object not found' }]);
     expect(await readdir(join(outDir, 'entries'))).toEqual([entryId + '.json']);
+    expect(await readFile(join(outDir, 'images', owner, entryId, freshId))).toEqual(
+      Buffer.from([7]),
+    );
+  });
+
+  it('cleans up the .part file and leaves only the target after a successful download', async () => {
+    const a = entry(entryId, { images: [{ path, name: 'photo.png' }] });
+    const bytes = new Uint8Array([1, 2, 3]);
+    const { client } = fakeClient(
+      {
+        personal: [{ items: [a], next_cursor: null }],
+        work: [{ items: [], next_cursor: null }],
+      },
+      { [path]: bytes },
+    );
+
+    await exportBook(client, outDir);
+
+    const target = join(outDir, 'images', owner, entryId, imageId);
+    expect(await readFile(target)).toEqual(Buffer.from(bytes));
+    await expect(access(target + '.part')).rejects.toThrow();
+  });
+
+  it('removes a leftover .part file and does not create the target when a download fails', async () => {
+    const a = entry(entryId, { images: [{ path, name: 'broken.png' }] });
+    const { client } = fakeClient(
+      {
+        personal: [{ items: [a], next_cursor: null }],
+        work: [{ items: [], next_cursor: null }],
+      },
+      { [path]: new Error('Object not found') },
+    );
+    const targetDir = join(outDir, 'images', owner, entryId);
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(join(targetDir, imageId + '.part'), new Uint8Array([9, 9, 9]));
+
+    const summary = await exportBook(client, outDir);
+
+    await expect(access(join(targetDir, imageId + '.part'))).rejects.toThrow();
+    await expect(access(join(targetDir, imageId))).rejects.toThrow();
+    expect(summary.failures).toEqual([{ path, message: 'Object not found' }]);
   });
 });
 
@@ -221,6 +274,37 @@ describe('mirroring', () => {
     expect(Date.parse(manifest.exported_at)).toBeGreaterThanOrEqual(before - 1000);
   });
 
+  it('keeps existing entry files and records a failure when no entries are returned', async () => {
+    const { client } = fakeClient({
+      personal: [{ items: [], next_cursor: null }],
+      work: [{ items: [], next_cursor: null }],
+    });
+    const staleId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    await mkdir(join(outDir, 'entries'), { recursive: true });
+    await writeFile(join(outDir, 'entries', staleId + '.json'), '{}\n');
+
+    const summary = await exportBook(client, outDir);
+
+    expect(summary.removed).toBe(0);
+    expect(await readdir(join(outDir, 'entries'))).toEqual([staleId + '.json']);
+    expect(summary.failures).toEqual([
+      { path: 'entries', message: 'No entries were returned; kept 1 existing entry files' },
+    ]);
+  });
+
+  it('records no failure when no entries are returned and the entries folder was already empty', async () => {
+    const { client } = fakeClient({
+      personal: [{ items: [], next_cursor: null }],
+      work: [{ items: [], next_cursor: null }],
+    });
+
+    const summary = await exportBook(client, outDir);
+
+    expect(summary.failures).toEqual([]);
+    const manifest = JSON.parse(await readFile(join(outDir, 'manifest.json'), 'utf8'));
+    expect(manifest.entries).toBe(0);
+  });
+
   it('does not remove stale files or write a manifest when listing fails midway', async () => {
     const a = entry('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
     let call = 0;
@@ -244,5 +328,23 @@ describe('mirroring', () => {
       [a.id + '.json', staleId + '.json'].sort(),
     );
     expect(await readdir(outDir)).not.toContain('manifest.json');
+  });
+});
+
+describe('exitCode', () => {
+  const emptySummary: ExportSummary = {
+    entries: { personal: 0, work: 0 },
+    imagesDownloaded: 0,
+    imagesSkipped: 0,
+    removed: 0,
+    failures: [],
+  };
+
+  it('is 1 when the summary has failures', () => {
+    expect(exitCode({ ...emptySummary, failures: [{ path: 'x', message: 'y' }] })).toBe(1);
+  });
+
+  it('is 0 when the summary has no failures', () => {
+    expect(exitCode(emptySummary)).toBe(0);
   });
 });
