@@ -58,14 +58,15 @@ bun run --cwd frontend test
 bun run --cwd frontend build
 bun run --cwd frontend test:browser
 bun run --cwd frontend check:connection
+bun run --cwd frontend export
 ```
 
 Use `bun run --cwd frontend test`, including `run`, to invoke Vitest; `bun test` invokes Bun's separate test runner.
 
-Browser tests use installed Google Chrome and simulated API responses. Database tests execute the migrations in embedded PostgreSQL. The connection check probes the configured Supabase project's registration and anonymous-access restrictions; it does not sign in or save entries. These checks do not replace the live two-session walkthrough in the setup guide.
+Browser tests use installed Google Chrome and simulated API responses. Database tests execute the migrations in embedded PostgreSQL. The connection check probes the configured Supabase project's registration and anonymous-access restrictions; it does not sign in or save entries. The export signs in as you and writes every entry and image to `export/`; see the [setup guide](docs/hosted-setup.md#6-export-your-book). These checks do not replace the live two-session walkthrough in the setup guide.
 
 ## Current limits
 
-Drafts stay in memory and can be lost when the app closes. Offline capture, links between entries, general file attachments, import/export and agent access are not implemented.
+Drafts stay in memory and can be lost when the app closes. Offline capture, links between entries, general file attachments, import and agent access are not implemented. Export is a local script; restoring an export into a fresh project is not yet implemented.
 
 The [hosted architecture](docs/plans/2026-09-11-hosted-commonplace-design.md) records the design direction. Earlier filesystem-first plans remain in `docs/plans/` as historical context.

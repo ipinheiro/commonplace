@@ -100,6 +100,29 @@ Launch the new Commonplace icon and sign in with your existing Commonplace accou
 
 The manifest sets the app name, icon, scope and standalone display. Browser installability is checked in a normal Chrome profile; actual phone installation still needs a device check. Installation is supported [without a service worker](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable). No service worker, offline database or persistent cache of personal API responses is installed. An internet connection is required; unsaved drafts remain in memory and can be lost when the app is closed.
 
+## 6. Export your book
+
+The export writes every entry and image to a folder on your computer. It signs in with your own account through the publishable key, so it sees exactly what the app sees. From the repo root:
+
+```sh
+bun run --cwd frontend export
+```
+
+You are prompted for your email and password; the password is not echoed and is never written to disk. For scheduled runs, set `COMMONPLACE_EMAIL` and `COMMONPLACE_PASSWORD` in the environment instead.
+
+The default output is `export/` at the repo root, which Git ignores. Pass `--out <dir>` to write somewhere else, for example a private Git repository.
+
+```
+export/
+  manifest.json                 when it ran and how many entries and images it holds
+  entries/<entry-id>.json       one file per entry, exactly as the API returns it
+  images/<owner>/<entry>/<id>   image bytes, at the same path the app stores them
+```
+
+Entry files are named by ID, so repeated runs overwrite in place and remove entries that no longer exist. Images already on disk are skipped and never removed. A failed image download is reported and the command exits non-zero after finishing everything else.
+
+Restoring an export into a fresh project is not yet implemented. The export contains every field the API returns plus the image bytes, so nothing is lost; the restore tooling is a separate piece of work.
+
 ## Checks
 
 ```sh
