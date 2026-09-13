@@ -1,7 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { access, mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { z } from 'zod';
-import { cursorSchema, entrySchema, type Space } from '../src/domain/entries.ts';
+import { cursorSchema, entryContext, entrySchema, type Space } from '../src/domain/entries.ts';
 
 export type ExportClient = {
   listEntries(args: Record<string, unknown>): Promise<unknown>;
@@ -45,6 +45,42 @@ async function* listPages(client: ExportClient, space: Space) {
   } while (cursor);
 }
 
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function downloadImages(
+  client: ExportClient,
+  outDir: string,
+  paths: Iterable<string>,
+  summary: ExportSummary,
+): Promise<void> {
+  for (const path of paths) {
+    // Storage paths are three UUIDs, validated by imageSchema, so splitting on '/' is safe.
+    const target = join(outDir, 'images', ...path.split('/'));
+    if (await exists(target)) {
+      summary.imagesSkipped += 1;
+      continue;
+    }
+    try {
+      const bytes = await client.downloadImage(path);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, bytes);
+      summary.imagesDownloaded += 1;
+    } catch (error) {
+      summary.failures.push({
+        path,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}
+
 export async function exportBook(client: ExportClient, outDir: string): Promise<ExportSummary> {
   const entriesDir = join(outDir, 'entries');
   await mkdir(entriesDir, { recursive: true });
@@ -56,15 +92,20 @@ export async function exportBook(client: ExportClient, outDir: string): Promise<
     failures: [],
   };
 
+  const imagePaths = new Set<string>();
+
   for (const space of spaces) {
     for await (const items of listPages(client, space)) {
       for (const item of items) {
         const entry = entrySchema.parse(item);
         await writeFile(join(entriesDir, entry.id + '.json'), JSON.stringify(item, null, 2) + '\n');
         summary.entries[space] += 1;
+        for (const image of entryContext(entry.metadata).images) imagePaths.add(image.path);
       }
     }
   }
+
+  await downloadImages(client, outDir, imagePaths, summary);
 
   return summary;
 }

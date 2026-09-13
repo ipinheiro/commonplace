@@ -127,3 +127,55 @@ describe('entries', () => {
     await expect(exportBook(client, outDir)).rejects.toThrow('list_entries failed');
   });
 });
+
+describe('images', () => {
+  const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const imageId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const otherId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const path = owner + '/' + entryId + '/' + imageId;
+  const otherPath = owner + '/' + entryId + '/' + otherId;
+
+  it('downloads every referenced image to a path mirroring storage', async () => {
+    const a = entry(entryId, { images: [{ path, name: 'photo.png' }] });
+    const bytes = new Uint8Array([1, 2, 3]);
+    const { client } = fakeClient(
+      {
+        personal: [{ items: [a], next_cursor: null }],
+        work: [{ items: [], next_cursor: null }],
+      },
+      { [path]: bytes },
+    );
+
+    const summary = await exportBook(client, outDir);
+
+    expect(summary.imagesDownloaded).toBe(1);
+    expect(summary.imagesSkipped).toBe(0);
+    const written = await readFile(join(outDir, 'images', owner, entryId, imageId));
+    expect(new Uint8Array(written)).toEqual(bytes);
+  });
+
+  it('skips images already on disk and reports failed downloads without stopping', async () => {
+    const a = entry(entryId, {
+      images: [
+        { path, name: 'kept.png' },
+        { path: otherPath, name: 'broken.png' },
+      ],
+    });
+    const { client } = fakeClient(
+      {
+        personal: [{ items: [a], next_cursor: null }],
+        work: [{ items: [], next_cursor: null }],
+      },
+      { [path]: new Uint8Array([9]), [otherPath]: new Error('Object not found') },
+    );
+    await mkdir(join(outDir, 'images', owner, entryId), { recursive: true });
+    await writeFile(join(outDir, 'images', owner, entryId, imageId), new Uint8Array([9]));
+
+    const summary = await exportBook(client, outDir);
+
+    expect(summary.imagesSkipped).toBe(1);
+    expect(summary.imagesDownloaded).toBe(0);
+    expect(summary.failures).toEqual([{ path: otherPath, message: 'Object not found' }]);
+    expect(await readdir(join(outDir, 'entries'))).toEqual([entryId + '.json']);
+  });
+});
