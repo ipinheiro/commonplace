@@ -13,7 +13,7 @@ A script that runs on your own computer, signs in as you, and writes every entry
 
 ## Decisions
 
-- **Runs locally, not in the app.** A Bun package script at `frontend/scripts/export.mjs`, run as `bun run --cwd frontend export`, following the existing connection check. A browser download of many images is fragile and phone storage is awkward.
+- **Runs locally, not in the app.** A Bun package script at `frontend/scripts/export.ts`, run as `bun run --cwd frontend export`, following the existing connection check. A browser download of many images is fragile and phone storage is awkward. It is TypeScript, run natively by Node 24, so it can reuse the app's domain schemas.
 - **JSON, not Markdown.** Each entry file is the API response exactly as the app receives it. Immune to frontmatter parsing edge cases and trivially restorable. Readability is not the goal of this piece.
 - **Export only.** A faithful restore into a fresh project has to deal with a new owner ID, re-uploaded image paths and the stamp trigger overwriting creation timestamps. Those are restore questions and are deferred.
 
@@ -31,6 +31,8 @@ export/
 Entry filenames are entry IDs, so repeated runs overwrite in place and a Git repository of the folder shows real diffs. Image paths mirror storage so the references inside each entry stay valid without rewriting. Original filenames are already inside each entry's image metadata.
 
 Entry files from a previous run that were not seen in this run are removed, so the folder mirrors the book once delete exists. Image files are never removed.
+
+A run that returns no entries never removes files; if the folder already held entries, the run reports it and exits non-zero.
 
 ## Credentials
 
@@ -52,7 +54,7 @@ The script talks to the Supabase client directly rather than importing the app's
 - Sign-in failure: stop with a message that does not echo the email or password.
 - A list call failure: stop. A partial entry set with a fresh manifest would be misleading.
 - An image download failure: record it, continue, report at the end, exit non-zero.
-- The output folder is created if absent. Writes go to the final path; there is no temp-and-rename step, because the folder is a mirror that the next run repairs.
+- The output folder is created if absent. Images are downloaded to a `.part` file and renamed on success, so an interrupted download is never mistaken for a finished one. Entry files are written directly; the next run overwrites them.
 
 ## Testing
 

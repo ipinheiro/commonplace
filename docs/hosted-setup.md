@@ -119,7 +119,7 @@ export/
   images/<owner>/<entry>/<id>   image bytes, at the same path the app stores them
 ```
 
-Entry files are named by ID, so repeated runs overwrite in place and remove entries that no longer exist. Images already on disk are skipped and never removed. A failed image download is reported and the command exits non-zero after finishing everything else.
+Entry files are named by ID, so repeated runs overwrite in place and remove entries that no longer exist. Images already on disk are skipped and never removed. A run that returns no entries keeps the existing files and exits non-zero, so a wrong account or an empty project cannot silently empty the folder. A failed image download is reported and the command exits non-zero after finishing everything else.
 
 Restoring an export into a fresh project is not yet implemented. The export contains every field the API returns plus the image bytes, so nothing is lost; the restore tooling is a separate piece of work.
 
