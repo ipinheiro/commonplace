@@ -8,7 +8,7 @@ The project URL and publishable key belong in `frontend/.env.local`, following [
 
 In your Supabase project:
 
-1. Open the SQL Editor and run the complete [entry migration](../supabase/migrations/202609110001_entries.sql). It is wrapped in a transaction. Run it once on the fresh project; subsequent schema changes should use new migration files.
+1. Open the SQL Editor and run every file in [`supabase/migrations/`](../supabase/migrations/) in filename order, starting with the [entry migration](../supabase/migrations/202609110001_entries.sql). Each is wrapped in a transaction. Run each once; when a new migration file is added to the repo, apply it before deploying a frontend that depends on it. A project that is behind the repo fails with `PGRST202` when the app or the export calls a function whose arguments changed.
 2. In the Data API settings, set **Exposed schemas** to **`api` only**. Keep `app` unexposed. SQL grants and ownership policies protect the private records; only the defined API functions should be reachable.
 3. In Authentication settings, **disable new user signups** and anonymous sign-ins. Provision your own confirmed email/password user through the dashboard. Do not share your password or secret keys with the agent.
 4. Open **Authentication → URL Configuration**. Set **Site URL** to `http://localhost:5173` and save. Once the frontend is deployed, replace this with its HTTPS address (for example, `https://your-app.vercel.app`). This setting tells Supabase where to send users for authentication redirects; it does not host the app. The initial email/password sign-in does not use redirects. See [Supabase's redirect URL documentation](https://supabase.com/docs/guides/auth/redirect-urls).
@@ -122,6 +122,8 @@ export/
 Entry files are named by ID, so repeated runs overwrite in place and remove entries that no longer exist. Images already on disk are skipped and never removed. A run that returns no entries keeps the existing files and exits non-zero, so a wrong account or an empty project cannot silently empty the folder. A failed image download is reported and the command exits non-zero after finishing everything else.
 
 Restoring an export into a fresh project is not yet implemented. The export contains every field the API returns plus the image bytes, so nothing is lost; the restore tooling is a separate piece of work.
+
+The export was verified against the production project on 2026-09-13: both spaces listed, every image downloaded, and the manifest counts matched the files on disk. The first attempt failed with `PGRST202` because the project was one migration behind the repo; applying the missing migration fixed it.
 
 ## Checks
 
