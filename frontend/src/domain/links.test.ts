@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ghostTitle, linksToMarkdown } from './links';
+import { ghostTitle, linksToMarkdown, linksToText } from './links';
 
 const scarf = { id: '11111111-1111-4111-8111-111111111111', title: 'Winter scarf', kind: 'note' };
 
@@ -71,5 +71,16 @@ describe('ghostTitle', () => {
 
   it('round-trips a title containing parentheses', () => {
     expect(ghostTitle('#ghost/Smiley%20%3A%29')).toBe('Smiley :)');
+  });
+});
+
+describe('linksToText', () => {
+  it('shows each link as its label or title, and leaves code untouched', () => {
+    const body = `See [[${scarf.id}|Test note]] and [[Moss stitch]] but \`[[not]]\`.`;
+    expect(linksToText(body)).toBe('See Test note and Moss stitch but `[[not]]`.');
+  });
+
+  it('falls back to the ID when an ID link has no label', () => {
+    expect(linksToText(`[[${scarf.id}]] ok`)).toBe(`${scarf.id} ok`);
   });
 });
