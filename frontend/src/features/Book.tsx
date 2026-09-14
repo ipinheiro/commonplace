@@ -475,7 +475,7 @@ export function Book({
                         {removal === 'idle' ? (
                           <>
                             <button
-                              className="text-button"
+                              className="secondary danger"
                               onClick={() => setRemoval('confirming')}
                             >
                               Delete entry
@@ -500,7 +500,7 @@ export function Book({
                               Cancel
                             </button>
                             <button
-                              className="secondary danger"
+                              className="primary danger"
                               disabled={removal === 'busy'}
                               onClick={() => void onDelete(detail.data!)}
                             >
