@@ -10,6 +10,12 @@ import {
   type EntryPage,
   type SaveEntry,
 } from '../domain/entries';
+import {
+  connectionsSchema,
+  linkTargetSchema,
+  type Connections,
+  type LinkTarget,
+} from '../domain/links';
 import { supabase } from './supabase';
 
 function readResponse<T>(schema: z.ZodType<T>, value: unknown): T {
@@ -106,6 +112,28 @@ export async function saveEntry(input: SaveEntry): Promise<Entry> {
 
 export async function deleteEntry(id: string): Promise<void> {
   await rpc('delete_entry', { p_entry_id: z.uuid().parse(id) });
+}
+
+export async function entryConnections(id: string, signal?: AbortSignal): Promise<Connections> {
+  return readResponse(
+    connectionsSchema,
+    await rpc('entry_connections', { p_entry_id: z.uuid().parse(id) }, signal),
+  );
+}
+
+export async function searchTitles(
+  query: string,
+  space: Space,
+  signal?: AbortSignal,
+): Promise<LinkTarget[]> {
+  return readResponse(
+    z.array(linkTargetSchema),
+    await rpc(
+      'search_titles',
+      { p_query: query.slice(0, 300), p_space: space, p_limit: 8 },
+      signal,
+    ),
+  );
 }
 
 // Discover types across every page, independently of the active search or filter.
