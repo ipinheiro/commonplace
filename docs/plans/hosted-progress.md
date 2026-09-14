@@ -22,7 +22,7 @@ The [hosted architecture](2026-09-11-hosted-commonplace-design.md) is the active
 - [x] Links and backlinks: `[[` picker, rendered links, ghosts that become entries, "Linked from" list; 8 database, 7 transform, 3 reader and 3 editor tests plus 1 browser test. Migration applied to both Supabase projects.
 - [x] Links deployed on 2026-09-14: tried on a preview, one card-excerpt fix, production deployed from develop, the original address repointed, and all 16 browser checks passed against it.
 - [ ] User confirmed home screen installation (phone browser access already confirmed).
-- [ ] Supabase Auth Site URL updated to the production address (user step).
+- [x] Supabase Auth Site URL set to the production address in the production project, with a preview wildcard redirect in the dev project, on 2026-09-14.
 
 ## Verification scope
 
