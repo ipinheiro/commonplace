@@ -24,7 +24,7 @@ Both screenshots use sample content and a fictional account.
 - Organise entries with custom types, tags, a source, a URL and image attachments.
 - Set an original entry date and browse newest or oldest first.
 - Search titles and entry text, filter by type, and capture new entries from type shortcuts.
-- Move entries between Personal and Work, and switch between light and dark themes.
+- Move entries between Personal and Work, delete entries you no longer want, and switch between light and dark themes.
 
 Saves check the entry revision so an older edit cannot silently overwrite a newer one. Retry receipts let interrupted saves be retried without creating duplicate entries.
 
