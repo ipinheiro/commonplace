@@ -108,11 +108,10 @@ export type SaveEntry = {
 
 export type DataErrorCode = 'auth' | 'conflict' | 'not-found' | 'invalid' | 'unavailable';
 export class DataError extends Error {
-  constructor(
-    public readonly code: DataErrorCode,
-    message: string,
-  ) {
+  readonly code: DataErrorCode;
+  constructor(code: DataErrorCode, message: string) {
     super(message);
     this.name = 'DataError';
+    this.code = code;
   }
 }

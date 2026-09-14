@@ -6,7 +6,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { signOut, watchSession, type Viewer } from './data/auth';
-import { listEntries, listEntryKinds } from './data/knowledge';
+import { deleteEntry, getEntry, listEntries, listEntryKinds } from './data/knowledge';
+import { DataError, type Entry } from './domain/entries';
 
 vi.mock('./data/supabase', () => ({ isConfigured: true }));
 vi.mock('./data/auth', () => ({ watchSession: vi.fn(), signIn: vi.fn(), signOut: vi.fn() }));
@@ -15,6 +16,7 @@ vi.mock('./data/knowledge', () => ({
   listEntryKinds: vi.fn(),
   getEntry: vi.fn(),
   saveEntry: vi.fn(),
+  deleteEntry: vi.fn(),
 }));
 let changeSession: (viewer: Viewer | null) => void;
 const owner: Viewer = { id: 'owner', email: 'owner@example.test' };
@@ -110,4 +112,67 @@ it('clears cached entry data and open drafts on explicit logout', async () => {
   await user.click(screen.getByRole('button', { name: 'Sign out' }));
   await waitFor(() => expect(screen.getByLabelText('Email')).toBeVisible());
   expect(client.getQueryData(['private-data'])).toBeUndefined();
+});
+
+const kept: Entry = {
+  id: '33333333-3333-4333-8333-333333333333',
+  title: 'Kept for now',
+  body: 'A thought worth revisiting.',
+  kind: 'note',
+  metadata: { space: 'personal' },
+  createdAt: '2026-09-01T09:00:00.000Z',
+  updatedAt: '2026-09-01T09:00:00.000Z',
+  version: 1,
+  deletedAt: null,
+};
+
+async function openKeptEntry() {
+  const user = userEvent.setup();
+  window.location.hash = `entry/${kept.id}`;
+  vi.mocked(listEntries).mockResolvedValue({ items: [kept], nextCursor: null });
+  vi.mocked(getEntry).mockResolvedValue(kept);
+  const client = openApp();
+  await screen.findByRole('heading', { level: 1, name: kept.title });
+  return { user, client };
+}
+
+it('deletes an entry only after a second press and returns to the book', async () => {
+  const { user, client } = await openKeptEntry();
+  vi.mocked(deleteEntry).mockResolvedValue();
+  await user.click(screen.getByRole('button', { name: 'Delete entry' }));
+  expect(deleteEntry).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('button', { name: 'Delete for good?' })).not.toBeInTheDocument();
+  vi.mocked(listEntries).mockResolvedValue({ items: [], nextCursor: null });
+  await user.click(screen.getByRole('button', { name: 'Delete entry' }));
+  await user.click(screen.getByRole('button', { name: 'Delete for good?' }));
+  await waitFor(() => expect(deleteEntry).toHaveBeenCalledWith(kept.id));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Entry deleted.'));
+  expect(window.location.hash).toBe('#personal');
+  expect(screen.queryByRole('heading', { level: 1, name: kept.title })).not.toBeInTheDocument();
+  expect(client.getQueryData(['entry', owner.id, kept.id])).toBeUndefined();
+});
+
+it('treats an already deleted entry as deleted', async () => {
+  const { user } = await openKeptEntry();
+  vi.mocked(deleteEntry).mockRejectedValue(new DataError('not-found', 'Gone already.'));
+  await user.click(screen.getByRole('button', { name: 'Delete entry' }));
+  await user.click(screen.getByRole('button', { name: 'Delete for good?' }));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Entry deleted.'));
+  expect(window.location.hash).toBe('#personal');
+});
+
+it('keeps the entry and shows the error when delete fails', async () => {
+  const { user } = await openKeptEntry();
+  vi.mocked(deleteEntry).mockRejectedValue(
+    new DataError('unavailable', 'Could not reach your book.'),
+  );
+  await user.click(screen.getByRole('button', { name: 'Delete entry' }));
+  await user.click(screen.getByRole('button', { name: 'Delete for good?' }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not reach your book.'),
+  );
+  expect(screen.getByRole('heading', { level: 1, name: kept.title })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Delete for good?' })).toBeVisible();
+  expect(window.location.hash).toBe(`#entry/${kept.id}`);
 });

@@ -8,7 +8,7 @@ The project URL and publishable key belong in `frontend/.env.local`, following [
 
 In your Supabase project:
 
-1. Open the SQL Editor and run the complete [entry migration](../supabase/migrations/202609110001_entries.sql). It is wrapped in a transaction. Run it once on the fresh project; subsequent schema changes should use new migration files.
+1. Open the SQL Editor and run every file in [`supabase/migrations/`](../supabase/migrations/) in filename order, starting with the [entry migration](../supabase/migrations/202609110001_entries.sql). Each is wrapped in a transaction. Run each once; when a new migration file is added to the repo, apply it before deploying a frontend that depends on it. A project that is behind the repo fails with `PGRST202` when the app or the export calls a function whose arguments changed.
 2. In the Data API settings, set **Exposed schemas** to **`api` only**. Keep `app` unexposed. SQL grants and ownership policies protect the private records; only the defined API functions should be reachable.
 3. In Authentication settings, **disable new user signups** and anonymous sign-ins. Provision your own confirmed email/password user through the dashboard. Do not share your password or secret keys with the agent.
 4. Open **Authentication → URL Configuration**. Set **Site URL** to `http://localhost:5173` and save. Once the frontend is deployed, replace this with its HTTPS address (for example, `https://your-app.vercel.app`). This setting tells Supabase where to send users for authentication redirects; it does not host the app. The initial email/password sign-in does not use redirects. See [Supabase's redirect URL documentation](https://supabase.com/docs/guides/auth/redirect-urls).
@@ -99,6 +99,31 @@ Open your deployment's HTTPS address on your phone:
 Launch the new Commonplace icon and sign in with your existing Commonplace account. Installation may use a separate browser session, so signing in again is expected. Check that your existing entry appears, save one from your phone, then refresh your computer's view to confirm it appears there too.
 
 The manifest sets the app name, icon, scope and standalone display. Browser installability is checked in a normal Chrome profile; actual phone installation still needs a device check. Installation is supported [without a service worker](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable). No service worker, offline database or persistent cache of personal API responses is installed. An internet connection is required; unsaved drafts remain in memory and can be lost when the app is closed.
+
+## 6. Export your book
+
+The export writes every entry and image to a folder on your computer. It signs in with your own account through the publishable key, so it sees exactly what the app sees. From the repo root:
+
+```sh
+bun run --cwd frontend export
+```
+
+You are prompted for your email and password; the password is not echoed and is never written to disk. For scheduled runs, set `COMMONPLACE_EMAIL` and `COMMONPLACE_PASSWORD` in the environment instead.
+
+The default output is `export/` at the repo root, which Git ignores. Pass `--out <dir>` to write somewhere else, for example a private Git repository.
+
+```
+export/
+  manifest.json                 when it ran and how many entries and images it holds
+  entries/<entry-id>.json       one file per entry, exactly as the API returns it
+  images/<owner>/<entry>/<id>   image bytes, at the same path the app stores them
+```
+
+Entry files are named by ID, so repeated runs overwrite in place and remove entries you have since deleted. Deleting keeps the row in the database with a `deleted_at` timestamp; the app and the export no longer see it, but nothing is removed from storage and a later restore piece can bring it back. Images already on disk are skipped and never removed. A run that returns no entries keeps the existing files and exits non-zero, so a wrong account or an empty project cannot silently empty the folder. A failed image download is reported and the command exits non-zero after finishing everything else.
+
+Restoring an export into a fresh project is not yet implemented. The export contains every field the API returns plus the image bytes, so nothing is lost; the restore tooling is a separate piece of work.
+
+The export was verified against the production project on 2026-09-13: both spaces listed, every image downloaded, and the manifest counts matched the files on disk. The first attempt failed with `PGRST202` because the project was one migration behind the repo; applying the missing migration fixed it.
 
 ## Checks
 

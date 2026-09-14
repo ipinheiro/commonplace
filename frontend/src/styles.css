@@ -2083,10 +2083,28 @@ pre {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   border-top: 1px solid var(--line);
   margin-top: 48px;
   padding-top: 24px;
+}
+.entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.secondary.danger {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+.secondary.danger:hover {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.primary.danger {
+  background: var(--bad);
+  color: var(--accent-ink);
 }
 .empty-state {
   display: grid;
