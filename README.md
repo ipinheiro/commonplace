@@ -24,6 +24,7 @@ Both screenshots use sample content and a fictional account.
 - Organise entries with custom types, tags, a source, a URL and image attachments.
 - Set an original entry date and browse newest or oldest first.
 - Search titles and entry text, filter by type, and capture new entries from type shortcuts.
+- Link entries by typing `[[` and choosing one; a link to a title that does not exist yet becomes a new entry with one press, and each entry lists what links to it.
 - Move entries between Personal and Work, delete entries you no longer want, and switch between light and dark themes.
 
 Saves check the entry revision so an older edit cannot silently overwrite a newer one. Retry receipts let interrupted saves be retried without creating duplicate entries.
@@ -67,6 +68,6 @@ Browser tests use installed Google Chrome and simulated API responses. Database 
 
 ## Current limits
 
-Drafts stay in memory and can be lost when the app closes. Offline capture, links between entries, general file attachments, import and agent access are not implemented. Export is a local script; restoring an export into a fresh project is not yet implemented.
+Drafts stay in memory and can be lost when the app closes. Offline capture, general file attachments, import and agent access are not implemented. Export is a local script; restoring an export into a fresh project is not yet implemented.
 
 The [hosted architecture](docs/plans/2026-09-11-hosted-commonplace-design.md) records the design direction. Earlier filesystem-first plans remain in `docs/plans/` as historical context.

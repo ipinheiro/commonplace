@@ -2,9 +2,14 @@ import { ArrowUpRight } from './ArrowUpRight';
 import { labelColor } from './labelColors';
 import { useEffect, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import Markdown from 'react-markdown';
 import type { Viewer } from '../data/auth';
-import { deleteEntry, getEntry, listEntries, listEntryKinds } from '../data/knowledge';
+import {
+  deleteEntry,
+  entryConnections,
+  getEntry,
+  listEntries,
+  listEntryKinds,
+} from '../data/knowledge';
 import {
   DataError,
   entryDate,
@@ -14,6 +19,7 @@ import {
   type EntryCursor,
 } from '../domain/entries';
 import { Editor } from './Editor';
+import { EntryBody } from './EntryBody';
 import { ThemeToggle } from './ThemeToggle';
 import { EntryContextDetails } from './EntryContextDetails';
 
@@ -53,7 +59,11 @@ export function Book({
   const [order, setOrder] = useState<'newest' | 'oldest'>('newest');
   const [kind, setKind] = useState<string | null>(null);
   const [selected, setSelected] = useState(currentEntry);
-  const [editor, setEditor] = useState<{ entry: Entry | null; kind?: string } | null>(null);
+  const [editor, setEditor] = useState<{
+    entry: Entry | null;
+    kind?: string;
+    title?: string;
+  } | null>(null);
   const [savedMessage, setSavedMessage] = useState('');
   useEffect(() => {
     if (!savedMessage) return;
@@ -127,6 +137,11 @@ export function Book({
     enabled: active && Boolean(selected),
     queryFn: ({ signal }) => getEntry(selected!, signal),
   });
+  const connections = useQuery({
+    queryKey: ['connections', viewer.id, selected],
+    enabled: active && Boolean(selected) && Boolean(detail.data),
+    queryFn: ({ signal }) => entryConnections(selected!, signal),
+  });
   useEffect(() => {
     if (selected && detail.data) setSpace(entrySpace(detail.data));
   }, [selected, detail.data]);
@@ -157,6 +172,7 @@ export function Book({
     client.removeQueries({ queryKey: ['entry', viewer.id, entry.id] });
     void client.invalidateQueries({ queryKey: ['entries', viewer.id] });
     void client.invalidateQueries({ queryKey: ['entry-types', viewer.id] });
+    void client.invalidateQueries({ queryKey: ['connections', viewer.id] });
     setSelected(null);
     window.location.hash = entrySpace(entry);
   }
@@ -177,6 +193,7 @@ export function Book({
     void client.invalidateQueries({ queryKey: ['entry-types', viewer.id] });
     client.setQueryData(['entry', viewer.id, entry.id], entry);
     void client.invalidateQueries({ queryKey: ['entries', viewer.id] });
+    void client.invalidateQueries({ queryKey: ['connections', viewer.id] });
     window.location.hash = `entry/${entry.id}`;
   }
   const items = entries.data?.pages.flatMap((page) => page.items) ?? [];
@@ -462,10 +479,41 @@ export function Book({
                       </time>
                     </div>
                     <h1>{detail.data.title}</h1>
-                    <div className="markdown">
-                      <Markdown skipHtml>{detail.data.body}</Markdown>
-                    </div>
+                    <EntryBody
+                      body={detail.data.body}
+                      links={connections.data?.links ?? []}
+                      onGhost={(title) => setEditor({ entry: null, title })}
+                    />
                     <EntryContextDetails metadata={detail.data.metadata} />
+                    {connections.data && connections.data.backlinks.length > 0 && (
+                      <section className="backlinks" aria-labelledby="backlinks-heading">
+                        <h2 id="backlinks-heading" className="eyebrow">
+                          Linked from
+                        </h2>
+                        <div className="entry-list">
+                          {connections.data.backlinks.map((backlink) => (
+                            <a
+                              className={`entry-card kind-${backlink.kind}`}
+                              href={`#entry/${backlink.id}`}
+                              key={backlink.id}
+                            >
+                              <div className="entry-meta">
+                                <span
+                                  className="type-label"
+                                  data-color={labelColor(backlink.kind, 'entry')}
+                                >
+                                  {backlink.kind}
+                                </span>
+                                <time dateTime={backlink.entryDate}>
+                                  {formatDate(backlink.entryDate)}
+                                </time>
+                              </div>
+                              <h3 className="entry-title">{backlink.title}</h3>
+                            </a>
+                          ))}
+                        </div>
+                      </section>
+                    )}
                     <footer className="entry-footer">
                       <span className="muted small">
                         Added {formatDate(detail.data.createdAt)} · Updated{' '}
@@ -565,6 +613,7 @@ export function Book({
           entry={editor.entry}
           initialKind={editor.kind}
           initialSpace={space}
+          initialTitle={editor.title}
           availableKinds={types.data}
           active={active}
           onReauthenticate={onReauthenticate}

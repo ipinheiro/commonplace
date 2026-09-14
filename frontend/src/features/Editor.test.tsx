@@ -4,10 +4,14 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DataError, type Entry } from '../domain/entries';
-import { getEntry, saveEntry } from '../data/knowledge';
+import { getEntry, saveEntry, searchTitles } from '../data/knowledge';
 import { Editor } from './Editor';
 
-vi.mock('../data/knowledge', () => ({ saveEntry: vi.fn(), getEntry: vi.fn() }));
+vi.mock('../data/knowledge', () => ({
+  saveEntry: vi.fn(),
+  getEntry: vi.fn(),
+  searchTitles: vi.fn(),
+}));
 const entry: Entry = {
   id: '11111111-1111-4111-8111-111111111111',
   title: 'Original thought',
@@ -19,7 +23,10 @@ const entry: Entry = {
   version: 1,
   deletedAt: null,
 };
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(searchTitles).mockResolvedValue([]);
+});
 afterEach(cleanup);
 
 it('lets the user reauthenticate without discarding a rejected save', async () => {
@@ -91,4 +98,51 @@ it('allows correcting rejected input without recycling the previous request', as
   const [first, second] = vi.mocked(saveEntry).mock.calls;
   expect(second[0].requestId).not.toBe(first[0].requestId);
   expect(second[0].draft.title).toBe('Original thought revised');
+});
+
+const scarf = {
+  id: '22222222-2222-4222-8222-222222222222',
+  title: 'Winter scarf',
+  kind: 'pattern',
+};
+
+it('offers entries after [[ and inserts the chosen one as an ID link', async () => {
+  const user = userEvent.setup();
+  vi.mocked(searchTitles).mockResolvedValue([scarf]);
+  render(<Editor entry={null} onSaved={vi.fn()} onClose={vi.fn()} />);
+  const body = screen.getByLabelText(/Your entry/);
+  await user.type(body, 'See [[[[win');
+  const option = await screen.findByRole('option', { name: /Winter scarf/ });
+  await waitFor(() =>
+    expect(searchTitles).toHaveBeenLastCalledWith('win', 'personal', expect.anything()),
+  );
+  expect(option).toHaveAttribute('aria-selected', 'true');
+  await user.keyboard('{Enter}');
+  expect(body).toHaveValue(`See [[${scarf.id}|Winter scarf]]`);
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+});
+
+it('closes the picker on Escape without closing the editor, and on ]]', async () => {
+  const user = userEvent.setup();
+  const onClose = vi.fn();
+  vi.mocked(searchTitles).mockResolvedValue([scarf]);
+  render(<Editor entry={null} onSaved={vi.fn()} onClose={onClose} />);
+  const body = screen.getByLabelText(/Your entry/);
+  await user.type(body, '[[[[wi');
+  await screen.findByRole('listbox');
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  expect(onClose).not.toHaveBeenCalled();
+  await user.type(body, 'nter]]');
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  expect(body).toHaveValue('[[winter]]');
+});
+
+it('searches the space chosen in the editor', async () => {
+  const user = userEvent.setup();
+  render(<Editor entry={null} initialSpace="work" onSaved={vi.fn()} onClose={vi.fn()} />);
+  await user.type(screen.getByLabelText(/Your entry/), '[[[[plan');
+  await waitFor(() =>
+    expect(searchTitles).toHaveBeenLastCalledWith('plan', 'work', expect.anything()),
+  );
 });

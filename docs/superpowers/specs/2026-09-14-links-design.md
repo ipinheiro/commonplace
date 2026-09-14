@@ -1,7 +1,7 @@
 # Links and backlinks - design
 
 Date: 2026-09-14
-Status: approved design, not yet implemented. Third of four pieces agreed on 2026-09-13: export, delete, links and backlinks, agent access. Semantic search follows.
+Status: implemented on 2026-09-14.
 
 ## Why
 
@@ -19,7 +19,7 @@ No new service. Links are one table with two foreign keys in the existing Postgr
 - **IDs are the truth, titles are rendered live.** An ID link renders the target's current title, so renaming never goes stale. The label inside the brackets is not updated in the body; it is only what the export and other tools see.
 - **Title links resolve at read time.** A `[[Some title]]` link matches an entry in the same space whose title equals it, case-insensitive and whitespace-trimmed. If several match, the oldest wins. If none match, it is a ghost. Nothing is rewritten when an entry with that title later appears; the link simply starts resolving.
 - **Links stay within a space.** The picker lists the current space only. Backlinks and title resolution only consider entries whose space matches the source's. Moving an entry to the other space hides its connections rather than breaking them; moving it back restores them.
-- **Parsed in the database.** `api.save_entry` parses the body and rewrites the source's link rows in the same transaction, so rows can never disagree with the text. Any later writer, including an agent through MCP, gets links without knowing the syntax.
+- **Parsed in the database.** A trigger on `app.entries`, firing after any insert or update of the body or title, parses the body and rewrites the source's link rows in the same transaction, so rows can never disagree with the text. Every writer is covered, including an agent through MCP, without knowing the syntax; a retried save that replays its receipt does not fire it, since the body and title are unchanged.
 - **Cross-owner targets become ghosts, silently.** An ID that belongs to another user, or to nothing, is stored as a ghost with the label as its title. Row-level security makes the foreign key unresolvable for the caller anyway; the save must not fail because of it.
 - **Deleted entries fall out through the tombstone.** A link to a deleted target renders as a ghost with its label. A deleted source contributes no backlinks. No rows are removed on delete; the reads filter on `deleted_at is null` like everything else.
 - **No graph database.** See "What it is". Revisit only if a query cannot be expressed as a few joins.
@@ -39,7 +39,7 @@ Grammar, applied outside code:
 - Newlines are not allowed inside a link.
 - A link whose ID is the entry's own ID, or whose title equals the entry's own title, is dropped at parse time.
 
-Code exclusion: fenced blocks delimited by three or more backticks or tildes, and inline code delimited by matching backtick runs, are blanked before matching. The blanking keeps character offsets so nothing else shifts.
+Code exclusion: a fence of exactly three backticks up to the next three backticks, or a single-backtick run up to the next backtick, is removed before matching. A fence with more than three backticks or a backtick inside it, and tilde fences, are not recognised. Only the order of links matters, so removal is enough.
 
 ## Data
 
@@ -63,11 +63,13 @@ create table app.entry_links (
 - Indexes on `(owner_id, target_id)` for backlinks and `(owner_id, lower(btrim(ghost_title)))` for title resolution.
 - Row-level security and grants mirror `app.entries`: owner only, `authenticated` may select, insert and delete. The API functions are the only writers.
 
-`app.save_entry` after writing the entry: delete the source's rows, parse the saved body, insert the new rows. Targets are validated with a single query against the owner's entries; anything not found becomes a ghost row. The mutation receipt covers the whole transaction as today, so a retried save neither duplicates nor drops rows.
+The trigger, after an insert or update of the body or title: delete the source's rows, parse the saved body, insert the new rows. Targets are validated with a single query against the owner's entries; anything not found becomes a ghost row. The mutation receipt covers the whole transaction as today, so a retried save that replays its receipt does not fire the trigger and neither duplicates nor drops rows.
 
 ## API
 
-One new function, returning everything the reader needs in one call:
+Two new functions.
+
+`api.entry_connections`, returning everything the reader needs in one call:
 
 ```
 api.entry_connections(p_entry_id uuid) returns jsonb
@@ -80,13 +82,16 @@ api.entry_connections(p_entry_id uuid) returns jsonb
 
 - `links` resolves ID rows whose target is live and in the same space, and title rows that match a live same-space entry.
 - `backlinks` unions ID rows targeting this entry and title rows equal to this entry's title, from live sources in the same space, excluding the entry itself.
-- `ghosts` is the remainder: title rows with no match, plus ID rows whose target is deleted, missing or in the other space, using the stored label.
+- `ghosts` lists the rows stored as ghosts, that is title links with no same-space match plus ID links whose target was unknown or another owner's at save time; an ID link whose target is later deleted or moved to the other space is absent from `links` and the reader renders it as a ghost from the label in the body.
 - Missing or deleted entry: `PT404`, as `get_entry`.
-- `get_entry`, `list_entries` and their payloads do not change.
+
+`api.search_titles(p_query, p_space, p_limit)` returns `[{ "id", "title", "kind" }]`: a case-insensitive substring match on titles in `p_space`, the caller's own entries only, newest updated first, at most `p_limit`. `22023` for a bad space or limit.
+
+`get_entry`, `list_entries` and their payloads do not change.
 
 ## Editor
 
-The body stays a textarea. When the caret is directly after `[[` with no closing `]]` on the same line, a list appears anchored below the textarea, filtered by the text typed after `[[`. Results come from the existing `list_entries` search in the current space, limited to the first page, debounced like the main search. Choosing an entry with Enter, Tab or a press replaces the partial text with `[[id|Title]]` and closes the list. Escape closes it; typing `]]` closes it and leaves whatever was typed as a title link. Arrow keys move through the list. The list is a `listbox` with the textarea as its `combobox`, so it works with a screen reader and on the phone keyboard.
+The body stays a textarea. When the caret is directly after `[[` with no closing `]]` on the same line, a list appears anchored below the textarea, filtered by the text typed after `[[`. Results come from `search_titles`, a case-insensitive substring match on titles in the current space, newest updated first, at most eight, debounced like the main search. Choosing an entry with Enter, Tab or a press replaces the partial text with `[[id|Title]]` and closes the list. Escape closes it; typing `]]` closes it and leaves whatever was typed as a title link. Arrow keys move through the list. A `textarea` cannot take the `combobox` role, so the list is a labelled `listbox` beneath it and a polite status line announces how many entries match.
 
 The preview renders links exactly as the reader does, so what you see is what will save. The preview cannot know live titles for ID links until they are saved, so it shows the label from the brackets.
 
@@ -110,7 +115,7 @@ Database, in the existing embedded PostgreSQL suite:
 - Ownership: an ID owned by another user becomes a ghost and the save succeeds.
 - Rename: retitling the target keeps an ID link resolved and the rendered title follows.
 - Title resolution: a hand-typed title link starts resolving once an entry with that title exists in the same space; case and surrounding whitespace do not matter; the other space does not count.
-- Delete: deleting the target turns the link into a ghost; deleting the source removes the backlink.
+- Delete: deleting the target removes it from `links`, and the reader shows the label as a ghost; deleting the source removes the backlink.
 - Space: a backlink from the other space is not listed.
 - Receipt: a retried save leaves exactly one row per link.
 
