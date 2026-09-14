@@ -239,7 +239,7 @@ export function saveEntry(client: BookClient, raw: unknown): Promise<ToolResult>
       p_kind: kind,
       p_context: context,
     });
-    if (error?.code === 'PT409') {
+    if (error?.code === 'PT409' && input.version !== undefined) {
       throw new ToolError(
         `This entry changed since version ${input.version}. Read it again and retry.`,
         error.code,

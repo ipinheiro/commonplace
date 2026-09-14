@@ -360,6 +360,12 @@ describe('save_entry', () => {
     expect(calls.filter((c) => c.name === 'save_entry')).toHaveLength(1);
   });
 
+  it('reports a create collision without mentioning an undefined version', async () => {
+    const { client } = fakeClient({ save_entry: fail('PT409') });
+    const result = await saveEntry(client, { title: 'T', body: 'B', kind: 'note' });
+    expect(text(result)).not.toContain('undefined');
+  });
+
   it('rejects a bad date, a non-http url and too many tags before calling the book', async () => {
     const { client, calls } = fakeClient({});
     const base = { title: 'T', body: 'B', kind: 'note' };

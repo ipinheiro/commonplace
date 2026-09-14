@@ -46,13 +46,15 @@ async function main(argv: string[]): Promise<number> {
     const { error } = await supabase.auth.signOut();
     if (error) console.error('The session could not be revoked remotely:', error.message);
     await storage.removeItem('');
-    console.log('Signed out. Removed', path);
+    console.log('Removed', path);
+    if (!error) console.log('Signed out.');
     return error ? 1 : 0;
   }
 
   const client: BookClient = {
     async signedIn() {
-      const { data } = await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
+      if (error) console.error('commonplace mcp: session check failed:', error.message);
       return data.session !== null;
     },
     async rpc(name, args) {

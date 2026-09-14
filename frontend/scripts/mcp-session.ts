@@ -40,7 +40,7 @@ export function sessionFile(path: string, url: string): SessionStorage {
     },
     async setItem(_key, value) {
       await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-      const part = path + '.part';
+      const part = `${path}.${process.pid}.part`;
       await writeFile(part, JSON.stringify({ url, session: JSON.parse(value) }) + '\n', {
         mode: 0o600,
       });
