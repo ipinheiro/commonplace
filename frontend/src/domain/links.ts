@@ -33,6 +33,17 @@ function normalise(title: string): string {
   return title.trim().toLowerCase();
 }
 
+// Markdown-significant characters are escaped so a title or label can never hijack the
+// link destination or be read as emphasis; encodeURIComponent leaves ( and ) unescaped,
+// which would otherwise end a Markdown destination early, so those are escaped too.
+function escapeLinkText(text: string): string {
+  return text.replace(/[\\[\]*_`]/g, (char) => `\\${char}`);
+}
+
+function encodeGhostTitle(title: string): string {
+  return encodeURIComponent(title).replace(/\(/g, '%28').replace(/\)/g, '%29');
+}
+
 export function linksToMarkdown(body: string, links: LinkTarget[]): string {
   const byId = new Map(links.map((link) => [link.id.toLowerCase(), link]));
   const byTitle = new Map(links.map((link) => [normalise(link.title), link]));
@@ -51,8 +62,8 @@ export function linksToMarkdown(body: string, links: LinkTarget[]): string {
         resolved = byTitle.get(normalise(inner));
         label = inner.trim();
       }
-      if (resolved) return `[${resolved.title}](#entry/${resolved.id})`;
-      return `[${label}](#ghost/${encodeURIComponent(label)})`;
+      if (resolved) return `[${escapeLinkText(resolved.title)}](#entry/${resolved.id})`;
+      return `[${escapeLinkText(label)}](#ghost/${encodeGhostTitle(label)})`;
     },
   );
 }

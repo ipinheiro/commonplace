@@ -534,6 +534,7 @@ describe('links', () => {
     await asUser(owner);
     return result.rows;
   }
+  const tick = () => db.query('select pg_sleep(0.005)');
 
   it('extracts ID and title links in body order, once each, outside code', async () => {
     const target = await save({ title: 'Winter scarf' });
@@ -572,6 +573,15 @@ describe('links', () => {
     ]);
   });
 
+  it('caps a long label on an unresolvable ID link instead of failing the save', async () => {
+    const unknown = randomUUID();
+    const label = 'x'.repeat(301);
+    const source = await save({ body: `[[${unknown}|${label}]]` });
+    const stored = await rows(source.id);
+    expect(stored).toEqual([{ target_id: null, ghost_title: 'x'.repeat(300), position: 1 }]);
+    expect(stored[0].ghost_title?.length).toBe(300);
+  });
+
   it('keeps an ID link through a rename and renders the current title', async () => {
     const target = await save({ title: 'Before' });
     const source = await save({ body: `[[${target.id}|Before]]` });
@@ -590,6 +600,7 @@ describe('links', () => {
     expect((await connections(source.id)).ghosts).toEqual(['moss STITCH']);
     expect((await connections(elsewhere.id)).backlinks).toEqual([]);
     const older = await save({ title: 'Moss stitch' });
+    await tick();
     const newer = await save({ title: 'Moss stitch' });
     const c = await connections(source.id);
     expect(c.links).toEqual([{ id: older.id, title: 'Moss stitch', kind: 'note' }]);
@@ -621,6 +632,7 @@ describe('links', () => {
   it('lists backlinks newest first from the same space only', async () => {
     const target = await save({ title: 'Hub' });
     const first = await save({ title: 'First', body: `[[${target.id}]]` });
+    await tick();
     const second = await save({ title: 'Second', body: `[[Hub]]` });
     const context = { tags: [], url: '', source: '', images: [], space: 'work' };
     await save({ title: 'Work note', body: `[[${target.id}]]`, context });

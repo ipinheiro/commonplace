@@ -38,6 +38,28 @@ describe('linksToMarkdown', () => {
   it('ignores empty brackets', () => {
     expect(linksToMarkdown('[[]] and [[  ]] stay', [])).toBe('[[]] and [[  ]] stay');
   });
+
+  it('escapes a resolved title so it cannot hijack the link destination', () => {
+    const evil = { ...scarf, title: 'pwn](https://evil.test)' };
+    expect(linksToMarkdown(`See [[${evil.id}|old label]].`, [evil])).toBe(
+      `See [pwn\\](https://evil.test)](#entry/${evil.id}).`,
+    );
+  });
+
+  it('escapes emphasis markers in a resolved title', () => {
+    const emphatic = { ...scarf, title: '*loud* note' };
+    expect(linksToMarkdown(`See [[${emphatic.id}]].`, [emphatic])).toBe(
+      `See [\\*loud\\* note](#entry/${emphatic.id}).`,
+    );
+  });
+
+  it('escapes emphasis markers in a ghost label too', () => {
+    expect(linksToMarkdown('[[*pwn* note]]', [])).toBe('[\\*pwn\\* note](#ghost/*pwn*%20note)');
+  });
+
+  it('keeps parentheses in a ghost destination valid', () => {
+    expect(linksToMarkdown('[[Smiley :)]]', [])).toBe('[Smiley :)](#ghost/Smiley%20%3A%29)');
+  });
 });
 
 describe('ghostTitle', () => {
@@ -45,5 +67,9 @@ describe('ghostTitle', () => {
     expect(ghostTitle('#ghost/Moss%20stitch')).toBe('Moss stitch');
     expect(ghostTitle('#entry/11111111-1111-4111-8111-111111111111')).toBeNull();
     expect(ghostTitle('https://example.test')).toBeNull();
+  });
+
+  it('round-trips a title containing parentheses', () => {
+    expect(ghostTitle('#ghost/Smiley%20%3A%29')).toBe('Smiley :)');
   });
 });

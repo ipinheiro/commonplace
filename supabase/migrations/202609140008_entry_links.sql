@@ -28,9 +28,9 @@ create policy entry_links_owner on app.entry_links to authenticated
 grant select, insert, delete on app.entry_links to authenticated;
 revoke all on app.entry_links from anon;
 
--- Fenced and inline code are blanked before matching. A fence that itself
--- contains a backtick splits into pieces but still hides its links. Tilde
--- fences are not recognised.
+-- Fences of exactly three backticks and single-backtick spans are removed
+-- before matching. A fence with more backticks or a backtick inside it, and
+-- tilde fences, are not recognised, and links inside them are extracted.
 create function app.entry_links_in(p_body text)
 returns table(link_position integer, target_id uuid, label text, ghost_title text)
 language plpgsql immutable set search_path = '' as $$
@@ -73,17 +73,25 @@ language plpgsql security invoker set search_path = '' as $$
 begin
     delete from app.entry_links where owner_id = new.owner_id and source_id = new.id;
     insert into app.entry_links (owner_id, source_id, target_id, ghost_title, position)
-    select distinct on (coalesce(t.id::text, lower(btrim(coalesce(c.ghost_title, c.label, c.target_id::text)))))
+    select distinct on (coalesce(r.target_id::text, lower(r.ghost_title)))
         new.owner_id,
         new.id,
-        t.id,
-        case when t.id is null then coalesce(c.ghost_title, c.label, c.target_id::text) end,
-        c.link_position
-    from app.entry_links_in(new.body_markdown) c
-    left join app.entries t on t.owner_id = new.owner_id and t.id = c.target_id
-    where (t.id is null or t.id <> new.id)
-        and lower(btrim(coalesce(c.ghost_title, ''))) <> lower(btrim(new.title))
-    order by coalesce(t.id::text, lower(btrim(coalesce(c.ghost_title, c.label, c.target_id::text)))), c.link_position
+        r.target_id,
+        r.ghost_title,
+        r.link_position
+    from (
+        select
+            c.link_position,
+            t.id as target_id,
+            case when t.id is null
+                then left(btrim(coalesce(c.ghost_title, c.label, c.target_id::text)), 300)
+            end as ghost_title
+        from app.entry_links_in(new.body_markdown) c
+        left join app.entries t on t.owner_id = new.owner_id and t.id = c.target_id
+        where (t.id is null or t.id <> new.id)
+            and lower(btrim(coalesce(c.ghost_title, ''))) <> lower(btrim(new.title))
+    ) r
+    order by coalesce(r.target_id::text, lower(r.ghost_title)), r.link_position
     on conflict do nothing;
     return new;
 end;
