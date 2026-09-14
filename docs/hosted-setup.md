@@ -1,6 +1,6 @@
 # Connect the hosted Commonplace app
 
-The current delivery is the first hosted slice: sign-in, note capture, listing, text search and editing. Tags, links, sources, attachments, offline capture and MCP are later milestones. PostgreSQL owns saved entries; the browser keeps only an in-memory query cache and current draft.
+The current delivery is the first hosted slice: sign-in, note capture, listing, text search and editing. Offline capture and a remote agent server are later milestones. PostgreSQL owns saved entries; the browser keeps only an in-memory query cache and current draft.
 
 ## 1. Prepare Supabase
 
@@ -142,6 +142,29 @@ Entry files are named by ID, so repeated runs overwrite in place and remove entr
 Restoring an export into a fresh project is not yet implemented. The export contains every field the API returns plus the image bytes, so nothing is lost; the restore tooling is a separate piece of work.
 
 The export was verified against the production project on 2026-09-13: both spaces listed, every image downloaded, and the manifest counts matched the files on disk. The first attempt failed with `PGRST202` because the project was one migration behind the repo; applying the missing migration fixed it.
+
+## 7. Connect Claude Code and Codex
+
+A local MCP server lets an agent session search, read, create and update entries in your book. It runs from this repo on your machine and signs in as you; nothing is hosted and nothing new is exposed on the internet. Agents cannot delete entries.
+
+Sign in once per machine. The password is not echoed and is never written to disk; only the resulting session is saved, readable by your user alone, at `~/.config/commonplace/session.json` (or under `$XDG_CONFIG_HOME`).
+
+```sh
+bun run --cwd frontend mcp login
+```
+
+Then register the server with each client, using the absolute path to this repo:
+
+```sh
+claude mcp add -s user commonplace -- node /absolute/path/to/commonplace/frontend/scripts/mcp.ts
+codex mcp add commonplace -- node /absolute/path/to/commonplace/frontend/scripts/mcp.ts
+```
+
+The script finds `frontend/.env.local` relative to itself, so no working directory is needed. Ask the agent to search your book; if it answers that it is not signed in, run the login command again. To sign out and revoke the saved session, run `bun run --cwd frontend mcp logout`; deleting the session file has the same effect on that machine.
+
+The tools are `search_entries`, `get_entry`, `search_titles`, `list_kinds` and `save_entry`. Every read and write names a space, `personal` by default. Updates carry the version the agent read, so a stale edit fails instead of overwriting, exactly as in the app, and fields the agent does not mention, including images, are kept. Links are written in the body as `[[Title]]` or `[[id|Label]]` and behave as they do in the app.
+
+To point a client at the Preview project instead, add the Preview project's URL and publishable key to the server's environment (`-e VITE_SUPABASE_URL=… -e VITE_SUPABASE_PUBLISHABLE_KEY=…` for Claude Code, `--env` for Codex) and run the login command with the same two variables set. The session file records which project it belongs to, so a production session is never used against the Preview project.
 
 ## Checks
 

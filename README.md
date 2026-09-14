@@ -25,6 +25,7 @@ Both screenshots use sample content and a fictional account.
 - Set an original entry date and browse newest or oldest first.
 - Search titles and entry text, filter by type, and capture new entries from type shortcuts.
 - Link entries by typing `[[` and choosing one; a link to a title that does not exist yet becomes a new entry with one press, and each entry lists what links to it.
+- Let Claude Code or Codex search, read, create and update entries through the local MCP server; see [connecting agents](docs/hosted-setup.md#7-connect-claude-code-and-codex).
 - Move entries between Personal and Work, delete entries you no longer want, and switch between light and dark themes.
 
 Saves check the entry revision so an older edit cannot silently overwrite a newer one. Retry receipts let interrupted saves be retried without creating duplicate entries.
@@ -68,6 +69,6 @@ Browser tests use installed Google Chrome and simulated API responses. Database 
 
 ## Current limits
 
-Drafts stay in memory and can be lost when the app closes. Offline capture, general file attachments, import and agent access are not implemented. Export is a local script; restoring an export into a fresh project is not yet implemented.
+Drafts stay in memory and can be lost when the app closes. Offline capture, general file attachments and import are not implemented. Agent access is local to machines with the repo; phone and claude.ai access would need a hosted server. Export is a local script; restoring an export into a fresh project is not yet implemented.
 
 The [hosted architecture](docs/plans/2026-09-11-hosted-commonplace-design.md) records the design direction. Earlier filesystem-first plans remain in `docs/plans/` as historical context.
