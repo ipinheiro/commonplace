@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
   contextSchema,
@@ -255,4 +256,70 @@ export function saveEntry(client: BookClient, raw: unknown): Promise<ToolResult>
       version: saved.data.version,
     };
   });
+}
+
+const linkHelp =
+  'Bodies are Markdown. Link to another entry with [[Title]] (the entry with that title in the ' +
+  'same space; it stays an unresolved link until such an entry exists, which is fine) or with ' +
+  '[[id|Label]] when you know the id (preferred; use search_titles to find one). Links inside ' +
+  'code are ignored.';
+
+export function registerTools(server: McpServer, client: BookClient): void {
+  server.registerTool(
+    'search_entries',
+    {
+      title: 'Search entries',
+      description:
+        'Search the book by words in titles and bodies, newest first. With no query, lists the ' +
+        'most recent entries. Returns at most `limit` (default 20, max 100) entries with an excerpt; ' +
+        'refine the query rather than paging.',
+      inputSchema: inputs.search_entries,
+    },
+    (args) => searchEntries(client, args),
+  );
+  server.registerTool(
+    'get_entry',
+    {
+      title: 'Get entry',
+      description:
+        'Read one entry in full by id, with the entries it links to, the entries that link to it, ' +
+        'and the titles of links that resolve to nothing yet. Image attachments are listed by name only.',
+      inputSchema: inputs.get_entry,
+    },
+    (args) => getEntry(client, args),
+  );
+  server.registerTool(
+    'search_titles',
+    {
+      title: 'Search titles',
+      description:
+        'Find up to 8 entries whose title contains the query, to get an id for a [[id|Label]] link ' +
+        'or to confirm a title exists for a [[Title]] link.',
+      inputSchema: inputs.search_titles,
+    },
+    (args) => searchTitles(client, args),
+  );
+  server.registerTool(
+    'list_kinds',
+    {
+      title: 'List entry kinds',
+      description:
+        'The entry kinds (types) in use in a space, with counts. File new entries under an existing kind when one fits.',
+      inputSchema: inputs.list_kinds,
+    },
+    (args) => listKinds(client, args),
+  );
+  server.registerTool(
+    'save_entry',
+    {
+      title: 'Save entry',
+      description:
+        'Create an entry (give title, body and kind; optionally space, date, tags, url, source) or ' +
+        'update one (give id and the version from get_entry, plus only the fields to change; the ' +
+        'rest, including images, are kept). A stale version fails without writing. ' +
+        linkHelp,
+      inputSchema: inputs.save_entry,
+    },
+    (args) => saveEntry(client, args),
+  );
 }

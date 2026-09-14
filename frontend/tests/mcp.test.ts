@@ -1,8 +1,12 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it } from 'vitest';
 import {
   getEntry,
   listKinds,
   loginHint,
+  registerTools,
   saveEntry,
   searchEntries,
   searchTitles,
@@ -366,5 +370,37 @@ describe('save_entry', () => {
         .isError,
     ).toBe(true);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('server', () => {
+  it('exposes the five tools and answers a call over MCP', async () => {
+    const { client: book } = fakeClient({
+      list_entries: ok({ items: [row(idA)], next_cursor: null }),
+    });
+    const server = new McpServer({ name: 'commonplace', version: '0.0.0' });
+    registerTools(server, book);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test', version: '0.0.0' });
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.map((t) => t.name).sort()).toEqual([
+        'get_entry',
+        'list_kinds',
+        'save_entry',
+        'search_entries',
+        'search_titles',
+      ]);
+      expect(tools.find((t) => t.name === 'save_entry')?.description).toContain('[[');
+      const result = await client.callTool({ name: 'search_entries', arguments: { limit: 5 } });
+      expect(result.isError).toBeFalsy();
+      const { entries } = JSON.parse((result.content as { text: string }[])[0].text);
+      expect(entries[0].id).toBe(idA);
+    } finally {
+      await client.close();
+      await server.close();
+    }
   });
 });

@@ -16,6 +16,7 @@
     "format:check": "prettier --check src tests scripts .storybook *.json *.ts index.html",
     "check:connection": "node scripts/check-connection.mjs",
     "export": "node scripts/export.ts",
+    "mcp": "node scripts/mcp.ts",
     "test:browser": "playwright test"
   },
   "dependencies": {
