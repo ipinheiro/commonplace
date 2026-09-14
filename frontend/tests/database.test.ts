@@ -557,6 +557,20 @@ describe('links', () => {
     expect(c.backlinks).toEqual([]);
   });
 
+  it('lists an entry linked by ID and by title once, at its first position', async () => {
+    const target = await save({ title: 'Winter scarf' });
+    const other = await save({ title: 'Moss stitch' });
+    const source = await save({
+      body: `[[Moss stitch]] then [[${target.id}|the scarf]] and [[winter scarf]] again.`,
+    });
+    expect((await rows(source.id)).length).toBe(3);
+    const c = await connections(source.id);
+    expect(c.links).toEqual([
+      { id: other.id, title: 'Moss stitch', kind: 'note' },
+      { id: target.id, title: 'Winter scarf', kind: 'note' },
+    ]);
+  });
+
   it('turns another owner’s ID and an unknown ID into ghosts without failing the save', async () => {
     const mine = await save({ title: 'Mine' });
     await asUser(stranger);
