@@ -75,6 +75,18 @@ bunx vercel@59.16.0 deploy --prod --yes --cwd frontend
 
 For a fresh checkout, first sign in with `bunx vercel@59.16.0 login` and link the existing project with `bunx vercel@59.16.0 link --project commonplace --cwd frontend`, selecting the account that owns it. Local `.vercel` state and environment files stay outside Git. `.vercelignore` excludes local environment files and test artifacts from uploads; Vercel supplies the production build variables.
 
+### Preview environment
+
+Vercel's Preview environment is the dev environment. It has its own Supabase project, set through the Preview values of the same two variables, so it holds separate accounts and entries. Every migration has to be applied in both projects' SQL Editors; the app, the export and the connection check follow whichever project `frontend/.env.local` names. To check that a project has a function without signing in, call it anonymously with that environment's publishable key: `42501` means the function exists and refused the anonymous caller, `PGRST202` means the migration is missing.
+
+Deploy a preview from the linked workspace with:
+
+```sh
+bunx vercel@59.16.0 deploy --yes --cwd frontend
+```
+
+Vercel Authentication is set to protect preview deployments only, so a preview URL redirects to a Vercel login while the production address stays public. The setting is under **Deployment Protection** in the project settings. When it protects every `vercel.app` address, the installed app on a phone is redirected to the Vercel login as well, and the production browser checks cannot run.
+
 If Vercel blocks a deployment because the commit author lacks access, connect the author's GitHub account under [Vercel account authentication](https://vercel.com/account/settings/authentication). This is separate from enabling automatic Git deployments. Keep the GitHub noreply commit email. Vercel documents the [author and account access requirements](https://vercel.com/docs/deployments/troubleshoot-project-collaboration#team-configuration). During the Bun migration, CLI 59.16.0 showed this block as `UNKNOWN`; `bunx vercel@59.16.0 inspect <deployment-url> --json` exposed the actual `BLOCKED` state. Retry deployment after resolving account access.
 
 If setting up Git-based deployment later, use:

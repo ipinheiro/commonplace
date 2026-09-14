@@ -18,6 +18,7 @@ The [hosted architecture](2026-09-11-hosted-commonplace-design.md) is the active
 - [x] Deployed the Bun migration after GitHub authorization; fresh Vercel build, public HTTP 200 and all 3 production browser checks passed.
 - [x] Export script writes entries and images to a local folder; verified against production on 2026-09-13 after applying the sort-order migration the hosted project was missing.
 - [x] Entry delete tombstones the row through `api.delete_entry` with a two-step button in the reader; 3 database and 3 UI tests. The hosted project needs the delete migration applied before deploying.
+- [x] Delete deployed on 2026-09-14: migration applied to both Supabase projects, delete tried on a preview, production deployed from develop and all 15 browser checks passed against it. Vercel Authentication had come to cover the production address and was set back to previews only.
 - [ ] User confirmed home screen installation (phone browser access already confirmed).
 - [ ] Supabase Auth Site URL updated to the production address (user step).
 
