@@ -44,28 +44,39 @@ function encodeGhostTitle(title: string): string {
   return encodeURIComponent(title).replace(/\(/g, '%28').replace(/\)/g, '%29');
 }
 
-export function linksToMarkdown(body: string, links: LinkTarget[]): string {
-  const byId = new Map(links.map((link) => [link.id.toLowerCase(), link]));
-  const byTitle = new Map(links.map((link) => [normalise(link.title), link]));
+type ParsedLink = { id: string | null; label: string };
+
+function parseLink(inner: string): ParsedLink | null {
+  const id = idPattern.exec(inner);
+  if (id) return { id: id[1].toLowerCase(), label: id[2]?.trim() || id[1] };
+  if (!inner.trim()) return null;
+  return { id: null, label: inner.trim() };
+}
+
+function replaceLinks(body: string, render: (link: ParsedLink) => string): string {
   return body.replace(
     tokenPattern,
     (match, code: string | undefined, inner: string | undefined) => {
       if (code !== undefined || inner === undefined) return match;
-      const id = idPattern.exec(inner);
-      let label: string;
-      let resolved: LinkTarget | undefined;
-      if (id) {
-        resolved = byId.get(id[1].toLowerCase());
-        label = id[2]?.trim() || id[1];
-      } else {
-        if (!inner.trim()) return match;
-        resolved = byTitle.get(normalise(inner));
-        label = inner.trim();
-      }
-      if (resolved) return `[${escapeLinkText(resolved.title)}](#entry/${resolved.id})`;
-      return `[${escapeLinkText(label)}](#ghost/${encodeGhostTitle(label)})`;
+      const link = parseLink(inner);
+      return link ? render(link) : match;
     },
   );
+}
+
+export function linksToMarkdown(body: string, links: LinkTarget[]): string {
+  const byId = new Map(links.map((link) => [link.id.toLowerCase(), link]));
+  const byTitle = new Map(links.map((link) => [normalise(link.title), link]));
+  return replaceLinks(body, ({ id, label }) => {
+    const resolved = id ? byId.get(id) : byTitle.get(normalise(label));
+    if (resolved) return `[${escapeLinkText(resolved.title)}](#entry/${resolved.id})`;
+    return `[${escapeLinkText(label)}](#ghost/${encodeGhostTitle(label)})`;
+  });
+}
+
+// For plain-text excerpts such as the library cards, where a link is just its label.
+export function linksToText(body: string): string {
+  return replaceLinks(body, ({ label }) => label);
 }
 
 export function ghostTitle(href: string): string | null {

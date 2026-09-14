@@ -20,6 +20,7 @@ import {
 } from '../domain/entries';
 import { Editor } from './Editor';
 import { EntryBody } from './EntryBody';
+import { linksToText } from '../domain/links';
 import { ThemeToggle } from './ThemeToggle';
 import { EntryContextDetails } from './EntryContextDetails';
 
@@ -426,8 +427,8 @@ export function Book({
                   </div>
                   <h2 className="entry-title">{entry.title}</h2>
                   <p>
-                    {entry.body.slice(0, 230)}
-                    {entry.body.length > 230 ? '…' : ''}
+                    {linksToText(entry.body).slice(0, 230)}
+                    {linksToText(entry.body).length > 230 ? '…' : ''}
                   </p>
                   <span className="card-arrow" aria-hidden="true">
                     <ArrowUpRight />
