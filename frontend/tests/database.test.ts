@@ -457,3 +457,53 @@ it('separates spaces through search, pagination, moves and older saves', async (
   await asUser(stranger);
   expect((await list('work')).items).toEqual([]);
 });
+
+describe('entry delete', () => {
+  it('tombstones an entry so it leaves reads, lists and edits', async () => {
+    const entry = await save({ title: 'Gone soon' });
+    await db.query('select api.delete_entry($1)', [entry.id]);
+    await expect(db.query('select api.get_entry($1)', [entry.id])).rejects.toMatchObject({
+      code: 'PT404',
+    });
+    expect(
+      (await db.query<{ page: { items: object[] } }>('select api.list_entries() as page')).rows[0]
+        .page.items,
+    ).toEqual([]);
+    await expect(save({ id: entry.id, version: 1, title: 'Edit after' })).rejects.toMatchObject({
+      code: 'PT404',
+    });
+    await db.exec('reset role');
+    const row = (
+      await db.query<{ deleted_at: string | null; version: number }>(
+        'select deleted_at, version from app.entries where id = $1',
+        [entry.id],
+      )
+    ).rows[0];
+    expect(row.deleted_at).not.toBeNull();
+    expect(row.version).toBe(2);
+  });
+
+  it('reports a missing or already deleted entry as not found', async () => {
+    const entry = await save();
+    await db.query('select api.delete_entry($1)', [entry.id]);
+    await expect(db.query('select api.delete_entry($1)', [entry.id])).rejects.toMatchObject({
+      code: 'PT404',
+    });
+    await expect(db.query('select api.delete_entry($1)', [randomUUID()])).rejects.toMatchObject({
+      code: 'PT404',
+    });
+  });
+
+  it("refuses to delete another user's entry", async () => {
+    const entry = await save();
+    await asUser(stranger);
+    await expect(db.query('select api.delete_entry($1)', [entry.id])).rejects.toMatchObject({
+      code: 'PT404',
+    });
+    await asUser(owner);
+    const result = await db.query<{ entry: { id: string } }>('select api.get_entry($1) as entry', [
+      entry.id,
+    ]);
+    expect(result.rows[0].entry.id).toBe(entry.id);
+  });
+});
