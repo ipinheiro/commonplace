@@ -104,6 +104,10 @@ export async function saveEntry(input: SaveEntry): Promise<Entry> {
   return readResponse(entrySchema, result);
 }
 
+export async function deleteEntry(id: string): Promise<void> {
+  await rpc('delete_entry', { p_entry_id: z.uuid().parse(id) });
+}
+
 // Discover types across every page, independently of the active search or filter.
 export async function listEntryKinds(
   signal?: AbortSignal,
