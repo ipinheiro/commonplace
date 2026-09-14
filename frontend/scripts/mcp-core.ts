@@ -1,14 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
+  contextSchema,
+  draftSchema,
   entryContext,
   entryDate,
+  entrySchema,
+  entrySpace,
   pageSchema,
   spaceSchema,
   type Entry,
   type EntryCursor,
   type EntryPage,
 } from '../src/domain/entries.ts';
-import { linkTargetSchema, linksToText } from '../src/domain/links.ts';
+import { connectionsSchema, linkTargetSchema, linksToText } from '../src/domain/links.ts';
 
 export type RpcResult = { data: unknown; error: { code: string } | null };
 export type BookClient = {
@@ -47,6 +52,19 @@ export const inputs = {
   },
   search_titles: { query: z.string().trim().min(1).max(300), space },
   list_kinds: { space },
+  get_entry: { id: z.uuid() },
+  save_entry: {
+    id: z.uuid().optional(),
+    version: z.number().int().min(1).optional(),
+    title: draftSchema.shape.title.optional(),
+    body: draftSchema.shape.body.optional(),
+    kind: draftSchema.shape.kind.optional(),
+    space: spaceSchema.optional(),
+    date: z.union([z.iso.date(), z.literal('')]).optional(),
+    tags: z.array(z.string().trim().min(1).max(64)).max(30).optional(),
+    url: z.string().trim().max(2048).optional(),
+    source: z.string().trim().max(1000).optional(),
+  },
 };
 
 export async function call<T>(
@@ -148,5 +166,93 @@ export function listKinds(client: BookClient, raw: unknown): Promise<ToolResult>
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([kind, count]) => ({ kind, count }));
     return { kinds };
+  });
+}
+
+export function getEntry(client: BookClient, raw: unknown): Promise<ToolResult> {
+  return run(client, async () => {
+    const input = z.object(inputs.get_entry).parse(raw);
+    const entry = await call(client, entrySchema, 'get_entry', { p_entry_id: input.id });
+    const connections = await call(client, connectionsSchema, 'entry_connections', {
+      p_entry_id: input.id,
+    });
+    const context = entryContext(entry.metadata);
+    return {
+      id: entry.id,
+      title: entry.title,
+      kind: entry.kind,
+      body: entry.body,
+      space: context.space,
+      date: entryDate(entry),
+      tags: context.tags,
+      url: context.url,
+      source: context.source,
+      images: context.images.map((image) => image.name),
+      version: entry.version,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      ...connections,
+    };
+  });
+}
+
+function given<T extends Record<string, unknown>>(fields: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, v]) => v !== undefined),
+  ) as Partial<T>;
+}
+
+export function saveEntry(client: BookClient, raw: unknown): Promise<ToolResult> {
+  return run(client, async () => {
+    const input = z.object(inputs.save_entry).parse(raw);
+    if ((input.id === undefined) !== (input.version === undefined)) {
+      throw new ToolError('Give both id and version to update an entry, or neither to create one.');
+    }
+    const fields = given({
+      space: input.space,
+      date: input.date,
+      tags: input.tags,
+      url: input.url,
+      source: input.source,
+    });
+    let title: string, body: string, kind: string, context: unknown;
+    if (input.id === undefined) {
+      if (!input.title || input.body === undefined || !input.kind) {
+        throw new ToolError('A new entry needs a title, body and kind.');
+      }
+      ({ title, body, kind } = input);
+      context = contextSchema.parse({ ...fields, images: [] });
+    } else {
+      const current = await call(client, entrySchema, 'get_entry', { p_entry_id: input.id });
+      title = input.title ?? current.title;
+      body = input.body ?? current.body;
+      kind = input.kind ?? current.kind;
+      context = contextSchema.parse({ ...entryContext(current.metadata), ...fields });
+    }
+    const { data, error } = await client.rpc('save_entry', {
+      p_request_id: randomUUID(),
+      p_entry_id: input.id ?? randomUUID(),
+      p_expected_version: input.version ?? null,
+      p_title: title,
+      p_body_markdown: body,
+      p_kind: kind,
+      p_context: context,
+    });
+    if (error?.code === 'PT409') {
+      throw new ToolError(
+        `This entry changed since version ${input.version}. Read it again and retry.`,
+        error.code,
+      );
+    }
+    if (error) throw new ToolError(messageFor(error.code), error.code);
+    const saved = entrySchema.safeParse(data);
+    if (!saved.success) throw new ToolError('Your book returned an unexpected response.');
+    return {
+      id: saved.data.id,
+      title: saved.data.title,
+      kind: saved.data.kind,
+      space: entrySpace(saved.data),
+      version: saved.data.version,
+    };
   });
 }

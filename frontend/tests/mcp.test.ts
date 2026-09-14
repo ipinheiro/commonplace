@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getEntry,
   listKinds,
   loginHint,
+  saveEntry,
   searchEntries,
   searchTitles,
   type BookClient,
@@ -185,5 +187,184 @@ describe('list_kinds', () => {
         { kind: 'quote', count: 2 },
       ],
     });
+  });
+});
+
+describe('get_entry', () => {
+  const connections = {
+    links: [{ id: idB, title: 'Winter scarf', kind: 'note' }],
+    backlinks: [{ id: idB, title: 'Winter scarf', kind: 'note', entry_date: '2026-09-01' }],
+    ghosts: ['Ghost'],
+  };
+
+  it('merges the entry with its connections', async () => {
+    const image = { path: `${idA}/${idA}/${idB}`, name: 'scarf.jpg' };
+    const { client, calls } = fakeClient({
+      get_entry: ok(
+        row(idA, {
+          metadata: {
+            space: 'work',
+            date: '2020-01-02',
+            tags: ['wool'],
+            url: 'https://x.y',
+            source: 'Book',
+            images: [image],
+          },
+        }),
+      ),
+      entry_connections: ok(connections),
+    });
+    const result = await getEntry(client, { id: idA });
+    expect(calls.map((c) => c.name)).toEqual(['get_entry', 'entry_connections']);
+    expect(calls[1].args).toEqual({ p_entry_id: idA });
+    expect(json(result)).toEqual({
+      id: idA,
+      title: 'Title aaaa',
+      kind: 'note',
+      body: 'Body',
+      space: 'work',
+      date: '2020-01-02',
+      tags: ['wool'],
+      url: 'https://x.y',
+      source: 'Book',
+      images: ['scarf.jpg'],
+      version: 1,
+      createdAt: '2026-09-13T10:00:00+00:00',
+      updatedAt: '2026-09-13T10:00:00+00:00',
+      links: connections.links,
+      backlinks: [{ id: idB, title: 'Winter scarf', kind: 'note', entryDate: '2026-09-01' }],
+      ghosts: ['Ghost'],
+    });
+  });
+
+  it('reports a missing entry', async () => {
+    const { client } = fakeClient({ get_entry: fail('PT404') });
+    expect(text(await getEntry(client, { id: idA }))).toBe('Entry not found.');
+  });
+
+  it('rejects a malformed id before calling the book', async () => {
+    const { client, calls } = fakeClient({});
+    expect((await getEntry(client, { id: 'nope' })).isError).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('save_entry', () => {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+  it('creates an entry with a fresh id and request id and a full context', async () => {
+    const { client, calls } = fakeClient({
+      save_entry: (args) => ok(row(args.p_entry_id as string, { title: 'New', version: 1 })),
+    });
+    const result = await saveEntry(client, {
+      title: 'New',
+      body: 'Text',
+      kind: 'note',
+      tags: ['a'],
+    });
+    expect(calls).toHaveLength(1);
+    const args = calls[0].args;
+    expect(args.p_entry_id).toMatch(uuid);
+    expect(args.p_request_id).toMatch(uuid);
+    expect(args.p_request_id).not.toBe(args.p_entry_id);
+    expect(args).toMatchObject({
+      p_expected_version: null,
+      p_title: 'New',
+      p_body_markdown: 'Text',
+      p_kind: 'note',
+      p_context: { space: 'personal', date: '', tags: ['a'], url: '', source: '', images: [] },
+    });
+    expect(json(result)).toEqual({
+      id: args.p_entry_id,
+      title: 'New',
+      kind: 'note',
+      space: 'personal',
+      version: 1,
+    });
+  });
+
+  it('requires title, body and kind to create', async () => {
+    const { client, calls } = fakeClient({});
+    const result = await saveEntry(client, { title: 'New', body: 'Text' });
+    expect(text(result)).toBe('A new entry needs a title, body and kind.');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('updates by reading first and keeping images and fields not given', async () => {
+    const image = { path: `${idA}/${idA}/${idB}`, name: 'scarf.jpg' };
+    const current = row(idA, {
+      title: 'Old',
+      kind: 'quote',
+      version: 3,
+      metadata: {
+        space: 'work',
+        date: '2020-01-02',
+        tags: ['wool'],
+        url: 'https://x.y',
+        source: 'Book',
+        images: [image],
+      },
+    });
+    const { client, calls } = fakeClient({
+      get_entry: ok(current),
+      save_entry: (args) => ok({ ...current, body_markdown: args.p_body_markdown, version: 4 }),
+    });
+    const result = await saveEntry(client, { id: idA, version: 3, body: 'Newer text', tags: [] });
+    expect(calls.map((c) => c.name)).toEqual(['get_entry', 'save_entry']);
+    expect(calls[1].args).toMatchObject({
+      p_entry_id: idA,
+      p_expected_version: 3,
+      p_title: 'Old',
+      p_body_markdown: 'Newer text',
+      p_kind: 'quote',
+      p_context: {
+        space: 'work',
+        date: '2020-01-02',
+        tags: [],
+        url: 'https://x.y',
+        source: 'Book',
+        images: [image],
+      },
+    });
+    expect(json(result)).toEqual({
+      id: idA,
+      title: 'Old',
+      kind: 'quote',
+      space: 'work',
+      version: 4,
+    });
+  });
+
+  it('requires id and version together', async () => {
+    const { client, calls } = fakeClient({});
+    expect(text(await saveEntry(client, { id: idA, body: 'x' }))).toBe(
+      'Give both id and version to update an entry, or neither to create one.',
+    );
+    expect(text(await saveEntry(client, { version: 1, body: 'x' }))).toBe(
+      'Give both id and version to update an entry, or neither to create one.',
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it('reports a stale version with the version sent and does not retry', async () => {
+    const { client, calls } = fakeClient({
+      get_entry: ok(row(idA, { version: 5 })),
+      save_entry: fail('PT409'),
+    });
+    const result = await saveEntry(client, { id: idA, version: 4, body: 'x' });
+    expect(text(result)).toBe('This entry changed since version 4. Read it again and retry.');
+    expect(calls.filter((c) => c.name === 'save_entry')).toHaveLength(1);
+  });
+
+  it('rejects a bad date, a non-http url and too many tags before calling the book', async () => {
+    const { client, calls } = fakeClient({});
+    const base = { title: 'T', body: 'B', kind: 'note' };
+    expect((await saveEntry(client, { ...base, date: '2020-13-01' })).isError).toBe(true);
+    expect((await saveEntry(client, { ...base, url: 'ftp://x' })).isError).toBe(true);
+    expect(
+      (await saveEntry(client, { ...base, tags: Array.from({ length: 31 }, (_, i) => 't' + i) }))
+        .isError,
+    ).toBe(true);
+    expect(calls).toHaveLength(0);
   });
 });
