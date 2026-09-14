@@ -73,6 +73,12 @@ To deploy an update from this already linked workspace, run the checks below, th
 bunx vercel@59.16.0 deploy --prod --yes --cwd frontend
 ```
 
+The project has two production addresses. The deploy command updates the one it prints, but the original `commonplace-rust.vercel.app` address, the one installed on the phone and used as the Supabase Site URL, kept serving a three-day-old build after the deploy on 2026-09-14. After every production deploy, check that this address serves the new bundle, and if not point it at the deployment the command printed:
+
+```sh
+bunx vercel@59.16.0 alias set <deployment-url> commonplace-rust.vercel.app --cwd frontend
+```
+
 For a fresh checkout, first sign in with `bunx vercel@59.16.0 login` and link the existing project with `bunx vercel@59.16.0 link --project commonplace --cwd frontend`, selecting the account that owns it. Local `.vercel` state and environment files stay outside Git. `.vercelignore` excludes local environment files and test artifacts from uploads; Vercel supplies the production build variables.
 
 ### Preview environment
