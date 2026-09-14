@@ -83,7 +83,9 @@ beforeAll(async () => {
   }
 });
 beforeEach(async () => {
-  await db.exec('reset role; truncate app.entries, app.mutations, storage.objects;');
+  await db.exec(
+    'reset role; truncate app.entry_links, app.entries, app.mutations, storage.objects;',
+  );
   await asUser(owner);
 });
 afterAll(async () => {
@@ -505,5 +507,155 @@ describe('entry delete', () => {
       entry.id,
     ]);
     expect(result.rows[0].entry.id).toBe(entry.id);
+  });
+});
+
+describe('links', () => {
+  async function connections(id: string) {
+    const result = await db.query<{
+      c: {
+        links: { id: string; title: string; kind: string }[];
+        backlinks: { id: string; title: string; kind: string; entry_date: string }[];
+        ghosts: string[];
+      };
+    }>('select api.entry_connections($1) as c', [id]);
+    return result.rows[0].c;
+  }
+  async function rows(sourceId: string) {
+    await db.exec('reset role');
+    const result = await db.query<{
+      target_id: string | null;
+      ghost_title: string | null;
+      position: number;
+    }>(
+      'select target_id, ghost_title, position from app.entry_links where source_id = $1 order by position',
+      [sourceId],
+    );
+    await asUser(owner);
+    return result.rows;
+  }
+
+  it('extracts ID and title links in body order, once each, outside code', async () => {
+    const target = await save({ title: 'Winter scarf' });
+    const source = await save({
+      body: [
+        `See [[${target.id}|the scarf]] and [[Moss stitch]].`,
+        '```',
+        '[[inside a fence]]',
+        '```',
+        'Inline `[[inside code]]` and again [[Moss stitch]] and [[ ]] and [[]].',
+      ].join('\n'),
+    });
+    expect(await rows(source.id)).toEqual([
+      { target_id: target.id, ghost_title: null, position: 1 },
+      { target_id: null, ghost_title: 'Moss stitch', position: 2 },
+    ]);
+    const c = await connections(source.id);
+    expect(c.links).toEqual([{ id: target.id, title: 'Winter scarf', kind: 'note' }]);
+    expect(c.ghosts).toEqual(['Moss stitch']);
+    expect(c.backlinks).toEqual([]);
+  });
+
+  it('turns another owner’s ID and an unknown ID into ghosts without failing the save', async () => {
+    const mine = await save({ title: 'Mine' });
+    await asUser(stranger);
+    const theirs = await save({ title: 'Theirs' });
+    await asUser(owner);
+    const unknown = randomUUID();
+    const source = await save({
+      body: `[[${theirs.id}|their note]] [[${unknown}]] [[${mine.id}]]`,
+    });
+    expect(await rows(source.id)).toEqual([
+      { target_id: null, ghost_title: 'their note', position: 1 },
+      { target_id: null, ghost_title: unknown, position: 2 },
+      { target_id: mine.id, ghost_title: null, position: 3 },
+    ]);
+  });
+
+  it('keeps an ID link through a rename and renders the current title', async () => {
+    const target = await save({ title: 'Before' });
+    const source = await save({ body: `[[${target.id}|Before]]` });
+    await save({ id: target.id, version: 1, title: 'After' });
+    expect((await connections(source.id)).links).toEqual([
+      { id: target.id, title: 'After', kind: 'note' },
+    ]);
+    expect((await connections(target.id)).backlinks.map((b) => b.id)).toEqual([source.id]);
+  });
+
+  it('resolves a title link once a same-space entry with that title exists', async () => {
+    const source = await save({ body: 'Try [[ moss STITCH ]] later.' });
+    expect((await connections(source.id)).ghosts).toEqual(['moss STITCH']);
+    const context = { tags: [], url: '', source: '', images: [], space: 'work' };
+    const elsewhere = await save({ title: 'Moss stitch', context });
+    expect((await connections(source.id)).ghosts).toEqual(['moss STITCH']);
+    expect((await connections(elsewhere.id)).backlinks).toEqual([]);
+    const older = await save({ title: 'Moss stitch' });
+    const newer = await save({ title: 'Moss stitch' });
+    const c = await connections(source.id);
+    expect(c.links).toEqual([{ id: older.id, title: 'Moss stitch', kind: 'note' }]);
+    expect(c.ghosts).toEqual([]);
+    expect((await connections(older.id)).backlinks.map((b) => b.id)).toEqual([source.id]);
+    expect(newer.id).not.toBe(older.id);
+  });
+
+  it('drops self links and treats deleted entries as absent', async () => {
+    const target = await save({ title: 'Target' });
+    const self = randomUUID();
+    const source = await save({
+      id: self,
+      title: 'Self',
+      body: `[[${self}]] [[Self]] [[${target.id}]]`,
+    });
+    expect(await rows(source.id)).toEqual([
+      { target_id: target.id, ghost_title: null, position: 3 },
+    ]);
+    await db.query('select api.delete_entry($1)', [target.id]);
+    expect((await connections(source.id)).links).toEqual([]);
+    await expect(connections(target.id)).rejects.toMatchObject({ code: 'PT404' });
+    const other = await save({ body: `[[${source.id}]]` });
+    expect((await connections(source.id)).backlinks.map((b) => b.id)).toEqual([other.id]);
+    await db.query('select api.delete_entry($1)', [other.id]);
+    expect((await connections(source.id)).backlinks).toEqual([]);
+  });
+
+  it('lists backlinks newest first from the same space only', async () => {
+    const target = await save({ title: 'Hub' });
+    const first = await save({ title: 'First', body: `[[${target.id}]]` });
+    const second = await save({ title: 'Second', body: `[[Hub]]` });
+    const context = { tags: [], url: '', source: '', images: [], space: 'work' };
+    await save({ title: 'Work note', body: `[[${target.id}]]`, context });
+    const c = await connections(target.id);
+    expect(c.backlinks.map((b) => b.id)).toEqual([second.id, first.id]);
+    expect(c.backlinks[0]).toMatchObject({ title: 'Second', kind: 'note' });
+    expect(c.backlinks[0].entry_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('keeps exactly one row per link when a save is retried', async () => {
+    const target = await save({ title: 'Once' });
+    const request = randomUUID();
+    const args = { request, body: `[[${target.id}]] [[${target.id}]]` };
+    const source = await save(args);
+    await save({ ...args, id: source.id });
+    expect((await rows(source.id)).length).toBe(1);
+  });
+
+  it('searches titles by substring within a space and rejects bad input', async () => {
+    await save({ title: 'Winter scarf' });
+    await save({ title: 'Summer hat' });
+    const context = { tags: [], url: '', source: '', images: [], space: 'work' };
+    await save({ title: 'Winter planning', context });
+    const search = async (query: string, space = 'personal') =>
+      (
+        await db.query<{ r: { id: string; title: string; kind: string }[] }>(
+          'select api.search_titles($1, $2) as r',
+          [query, space],
+        )
+      ).rows[0].r;
+    expect((await search('wint')).map((e) => e.title)).toEqual(['Winter scarf']);
+    expect((await search('wint', 'work')).map((e) => e.title)).toEqual(['Winter planning']);
+    expect((await search('%')).map((e) => e.title)).toEqual([]);
+    await expect(search('a', 'team')).rejects.toMatchObject({ code: '22023' });
+    await asUser(stranger);
+    expect(await search('wint')).toEqual([]);
   });
 });
