@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const linkTargetSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   title: z.string().min(1),
   kind: z.string().min(1),
 });
@@ -10,7 +10,7 @@ export type LinkTarget = z.infer<typeof linkTargetSchema>;
 export const connectionsSchema = z
   .object({
     links: z.array(linkTargetSchema),
-    backlinks: z.array(linkTargetSchema.extend({ entry_date: z.string().date() })),
+    backlinks: z.array(linkTargetSchema.extend({ entry_date: z.iso.date() })),
     ghosts: z.array(z.string()),
   })
   .transform((value) => ({
