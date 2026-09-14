@@ -96,6 +96,23 @@ async function fakeHostedApi(page: Page) {
       });
     if (path.endsWith('/rpc/get_entry'))
       return route.fulfill({ json: entries.find((entry) => entry.id === body.p_entry_id) });
+    if (path.endsWith('/rpc/search_titles'))
+      return route.fulfill({
+        json: entries
+          .filter(
+            (entry) =>
+              (entry.metadata.space ?? 'personal') === (body.p_space ?? 'personal') &&
+              entry.title.toLowerCase().includes(
+                String(body.p_query ?? '')
+                  .trim()
+                  .toLowerCase(),
+              ),
+          )
+          .slice(0, 8)
+          .map((entry) => ({ id: entry.id, title: entry.title, kind: entry.kind })),
+      });
+    if (path.endsWith('/rpc/entry_connections'))
+      return route.fulfill({ json: { links: [], backlinks: [], ghosts: [] } });
     if (path.endsWith('/rpc/save_entry')) {
       let entry = entries.find((entry) => entry.id === body.p_entry_id);
       if (!entry) {
@@ -481,4 +498,22 @@ test('saving after Back keeps the draft in its original space', async ({ page })
   ).toBeVisible();
   await spaces.getByRole('link', { name: 'Personal', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Saved work thought' })).toHaveCount(0);
+});
+
+test('the link picker is usable at phone width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await fakeHostedApi(page);
+  await login(page);
+  await page.getByRole('button', { name: /New entry/ }).click();
+  await page.getByLabel('Title').fill('Cast on');
+  const body = page.getByLabel(/Your entry/);
+  await body.fill('See [[win');
+  const option = page.getByRole('option', { name: /winter/i });
+  await expect(option).toBeVisible();
+  const box = await option.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+  await option.click();
+  await expect(body).toHaveValue(/^See \[\[[0-9a-f-]{36}\|.*winter.*\]\]$/i);
+  await expect(page.getByRole('listbox')).toHaveCount(0);
 });

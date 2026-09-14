@@ -1,7 +1,7 @@
 # Links and backlinks - design
 
 Date: 2026-09-14
-Status: approved design, not yet implemented. Third of four pieces agreed on 2026-09-13: export, delete, links and backlinks, agent access. Semantic search follows.
+Status: implemented on 2026-09-14.
 
 ## Why
 
@@ -39,7 +39,7 @@ Grammar, applied outside code:
 - Newlines are not allowed inside a link.
 - A link whose ID is the entry's own ID, or whose title equals the entry's own title, is dropped at parse time.
 
-Code exclusion: fenced blocks delimited by three or more backticks or tildes, and inline code delimited by matching backtick runs, are blanked before matching. The blanking keeps character offsets so nothing else shifts.
+Code exclusion: fenced blocks delimited by three or more backticks or tildes, and inline code delimited by matching backtick runs, are blanked before matching. Only the order of links matters, so code is simply removed before matching. Tilde fences are not recognised.
 
 ## Data
 
@@ -86,7 +86,7 @@ api.entry_connections(p_entry_id uuid) returns jsonb
 
 ## Editor
 
-The body stays a textarea. When the caret is directly after `[[` with no closing `]]` on the same line, a list appears anchored below the textarea, filtered by the text typed after `[[`. Results come from the existing `list_entries` search in the current space, limited to the first page, debounced like the main search. Choosing an entry with Enter, Tab or a press replaces the partial text with `[[id|Title]]` and closes the list. Escape closes it; typing `]]` closes it and leaves whatever was typed as a title link. Arrow keys move through the list. The list is a `listbox` with the textarea as its `combobox`, so it works with a screen reader and on the phone keyboard.
+The body stays a textarea. When the caret is directly after `[[` with no closing `]]` on the same line, a list appears anchored below the textarea, filtered by the text typed after `[[`. Results come from the existing `list_entries` search in the current space, limited to the first page, debounced like the main search. Choosing an entry with Enter, Tab or a press replaces the partial text with `[[id|Title]]` and closes the list. Escape closes it; typing `]]` closes it and leaves whatever was typed as a title link. Arrow keys move through the list. A `textarea` cannot take the `combobox` role, so the list is a labelled `listbox` beneath it and a polite status line announces how many entries match.
 
 The preview renders links exactly as the reader does, so what you see is what will save. The preview cannot know live titles for ID links until they are saved, so it shows the label from the brackets.
 
