@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import Markdown from 'react-markdown';
 import type { Viewer } from '../data/auth';
-import { getEntry, listEntries, listEntryKinds } from '../data/knowledge';
+import { deleteEntry, getEntry, listEntries, listEntryKinds } from '../data/knowledge';
 import {
   DataError,
   entryDate,
@@ -130,6 +130,36 @@ export function Book({
   useEffect(() => {
     if (selected && detail.data) setSpace(entrySpace(detail.data));
   }, [selected, detail.data]);
+  const [removal, setRemoval] = useState<'idle' | 'confirming' | 'busy'>('idle');
+  const [removalError, setRemovalError] = useState<DataError | null>(null);
+  useEffect(() => {
+    setRemoval('idle');
+    setRemovalError(null);
+  }, [selected]);
+  async function onDelete(entry: Entry) {
+    setRemoval('busy');
+    setRemovalError(null);
+    try {
+      await deleteEntry(entry.id);
+    } catch (error) {
+      // A missing entry is already gone, which is the outcome asked for.
+      if (!(error instanceof DataError && error.code === 'not-found')) {
+        setRemovalError(
+          error instanceof DataError
+            ? error
+            : new DataError('unavailable', 'Could not delete this entry. Try again shortly.'),
+        );
+        setRemoval('confirming');
+        return;
+      }
+    }
+    setSavedMessage('Entry deleted.');
+    client.removeQueries({ queryKey: ['entry', viewer.id, entry.id] });
+    void client.invalidateQueries({ queryKey: ['entries', viewer.id] });
+    void client.invalidateQueries({ queryKey: ['entry-types', viewer.id] });
+    setSelected(null);
+    window.location.hash = entrySpace(entry);
+  }
   function onSaved(entry: Entry) {
     setEditor(null);
     setSavedMessage('Entry saved.');
@@ -441,13 +471,53 @@ export function Book({
                         Added {formatDate(detail.data.createdAt)} · Updated{' '}
                         {formatDate(detail.data.updatedAt)}
                       </span>
-                      <button
-                        className="secondary"
-                        onClick={() => setEditor({ entry: detail.data! })}
-                      >
-                        Edit entry
-                      </button>
+                      <div className="entry-actions">
+                        {removal === 'idle' ? (
+                          <>
+                            <button
+                              className="text-button"
+                              onClick={() => setRemoval('confirming')}
+                            >
+                              Delete entry
+                            </button>
+                            <button
+                              className="secondary"
+                              onClick={() => setEditor({ entry: detail.data! })}
+                            >
+                              Edit entry
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              className="text-button"
+                              disabled={removal === 'busy'}
+                              onClick={() => {
+                                setRemoval('idle');
+                                setRemovalError(null);
+                              }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className="secondary danger"
+                              disabled={removal === 'busy'}
+                              onClick={() => void onDelete(detail.data!)}
+                            >
+                              Delete for good?
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </footer>
+                    {removalError && (
+                      <div className="notice error" role="alert">
+                        <p>{removalError.message}</p>
+                        {removalError.code === 'auth' && (
+                          <button onClick={onReauthenticate}>Sign in again</button>
+                        )}
+                      </div>
+                    )}
                   </article>
                 )}
               </>
