@@ -12,7 +12,7 @@ import {
   type SaveEntry,
 } from '../domain/entries';
 import { getEntry, saveEntry } from '../data/knowledge';
-import Markdown from 'react-markdown';
+import { EntryBody } from './EntryBody';
 import { EntryContextDetails } from './EntryContextDetails';
 import { EntryImage } from './EntryImage';
 import { uploadImage, imageTypes, maxImageBytes } from '../data/images';
@@ -21,6 +21,7 @@ type Props = {
   entry: Entry | null;
   initialKind?: string;
   initialSpace?: Space;
+  initialTitle?: string;
   availableKinds?: string[];
   onSaved: (entry: Entry) => void;
   onClose: () => void;
@@ -32,6 +33,7 @@ export function Editor({
   entry,
   initialKind = 'note',
   initialSpace = 'personal',
+  initialTitle = '',
   availableKinds = [],
   onSaved,
   onClose,
@@ -46,7 +48,12 @@ export function Editor({
           kind: entry.kind,
           context: entryContext(entry.metadata),
         }
-      : { title: '', body: '', kind: initialKind, context: entryContext({ space: initialSpace }) },
+      : {
+          title: initialTitle,
+          body: '',
+          kind: initialKind,
+          context: entryContext({ space: initialSpace }),
+        },
   );
   const [tagInput, setTagInput] = useState('');
   const [pendingImages, setPendingImages] = useState<{ id: string; file: File; url: string }[]>([]);
@@ -69,7 +76,7 @@ export function Editor({
   const version = useRef(entry?.version ?? null);
   const uncertain = error?.code === 'unavailable' || error?.code === 'auth';
   const dirty =
-    draft.title !== (entry?.title ?? '') ||
+    draft.title !== (entry?.title ?? initialTitle) ||
     draft.body !== (entry?.body ?? '') ||
     draft.kind !== (entry?.kind ?? initialKind) ||
     tagInput.trim() !== '' ||
@@ -334,10 +341,10 @@ export function Editor({
               </button>
             </div>
             {preview && (
-              <div className="markdown draft-preview" aria-label="Entry preview">
-                <Markdown skipHtml>
-                  {draft.body || 'Your preview will appear here once you start writing.'}
-                </Markdown>
+              <div className="draft-preview" aria-label="Entry preview">
+                <EntryBody
+                  body={draft.body || 'Your preview will appear here once you start writing.'}
+                />
               </div>
             )}
             <textarea

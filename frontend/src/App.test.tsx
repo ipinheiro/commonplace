@@ -6,7 +6,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { signOut, watchSession, type Viewer } from './data/auth';
-import { deleteEntry, getEntry, listEntries, listEntryKinds } from './data/knowledge';
+import {
+  deleteEntry,
+  entryConnections,
+  getEntry,
+  listEntries,
+  listEntryKinds,
+  searchTitles,
+} from './data/knowledge';
+import { emptyConnections } from './domain/links';
 import { DataError, type Entry } from './domain/entries';
 
 vi.mock('./data/supabase', () => ({ isConfigured: true }));
@@ -17,6 +25,8 @@ vi.mock('./data/knowledge', () => ({
   getEntry: vi.fn(),
   saveEntry: vi.fn(),
   deleteEntry: vi.fn(),
+  entryConnections: vi.fn(),
+  searchTitles: vi.fn(),
 }));
 let changeSession: (viewer: Viewer | null) => void;
 const owner: Viewer = { id: 'owner', email: 'owner@example.test' };
@@ -30,6 +40,8 @@ beforeEach(() => {
   });
   vi.mocked(listEntries).mockResolvedValue({ items: [], nextCursor: null });
   vi.mocked(listEntryKinds).mockResolvedValue([]);
+  vi.mocked(entryConnections).mockResolvedValue(emptyConnections);
+  vi.mocked(searchTitles).mockResolvedValue([]);
   vi.mocked(signOut).mockResolvedValue();
 });
 afterEach(cleanup);
@@ -175,4 +187,57 @@ it('keeps the entry and shows the error when delete fails', async () => {
   expect(screen.getByRole('heading', { level: 1, name: kept.title })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Delete for good?' })).toBeVisible();
   expect(window.location.hash).toBe(`#entry/${kept.id}`);
+});
+
+const scarf: Entry = {
+  ...kept,
+  id: '44444444-4444-4444-8444-444444444444',
+  title: 'Winter scarf',
+  body: 'Moss stitch, warm wool.',
+  kind: 'pattern',
+};
+
+it('renders resolved links as entry links and ghosts as buttons', async () => {
+  vi.mocked(entryConnections).mockResolvedValue({
+    links: [{ id: scarf.id, title: scarf.title, kind: scarf.kind }],
+    backlinks: [],
+    ghosts: ['Moss stitch'],
+  });
+  const kept2 = { ...kept, body: `Read [[${scarf.id}|old name]] and [[Moss stitch]].` };
+  vi.mocked(getEntry).mockResolvedValue(kept2);
+  vi.mocked(listEntries).mockResolvedValue({ items: [kept2], nextCursor: null });
+  window.location.hash = `entry/${kept.id}`;
+  openApp();
+  const link = await screen.findByRole('link', { name: 'Winter scarf' });
+  expect(link).toHaveAttribute('href', `#entry/${scarf.id}`);
+  const ghost = screen.getByRole('button', { name: 'Moss stitch' });
+  expect(ghost).toHaveClass('ghost-link');
+});
+
+it('opens the capture editor with the ghost title filled in', async () => {
+  const user = userEvent.setup();
+  const kept2 = { ...kept, body: 'Try [[Moss stitch]].' };
+  vi.mocked(getEntry).mockResolvedValue(kept2);
+  vi.mocked(listEntries).mockResolvedValue({ items: [kept2], nextCursor: null });
+  window.location.hash = `entry/${kept.id}`;
+  openApp();
+  await user.click(await screen.findByRole('button', { name: 'Moss stitch' }));
+  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(screen.getByLabelText('Title')).toHaveValue('Moss stitch');
+});
+
+it('lists backlinks only when there are some', async () => {
+  const { client } = await openKeptEntry();
+  expect(screen.queryByRole('heading', { name: 'Linked from' })).not.toBeInTheDocument();
+  vi.mocked(entryConnections).mockResolvedValue({
+    links: [],
+    backlinks: [{ id: scarf.id, title: scarf.title, kind: scarf.kind, entryDate: '2026-09-01' }],
+    ghosts: [],
+  });
+  await client.invalidateQueries({ queryKey: ['connections', owner.id] });
+  await screen.findByRole('heading', { name: 'Linked from' });
+  expect(screen.getByRole('link', { name: /Winter scarf/ })).toHaveAttribute(
+    'href',
+    `#entry/${scarf.id}`,
+  );
 });
