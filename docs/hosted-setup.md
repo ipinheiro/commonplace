@@ -162,6 +162,12 @@ codex mcp add commonplace -- node /absolute/path/to/commonplace/frontend/scripts
 
 The commands need Node 24 or newer on the PATH the client uses, since the script is TypeScript run directly by Node.
 
+Claude Code in auto mode asks its safety classifier before running an unfamiliar tool and may refuse the book's tools. Pre-approve the server once by adding `mcp__commonplace` to `permissions.allow` in `~/.claude/settings.json`, or through `/permissions` inside Claude Code:
+
+```json
+{ "permissions": { "allow": ["mcp__commonplace"] } }
+```
+
 The script finds `frontend/.env.local` relative to itself, so no working directory is needed. Ask the agent to search your book; if it answers that it is not signed in, run the login command again. To sign out and revoke the saved session, run `bun run --cwd frontend mcp logout`; deleting the session file has the same effect on that machine.
 
 The tools are `search_entries`, `get_entry`, `search_titles`, `list_kinds` and `save_entry`. Every read and write names a space, `personal` by default. Updates carry the version the agent read, so a stale edit fails instead of overwriting, exactly as in the app, and fields the agent does not mention, including images, are kept. Links are written in the body as `[[Title]]` or `[[id|Label]]` and behave as they do in the app.
