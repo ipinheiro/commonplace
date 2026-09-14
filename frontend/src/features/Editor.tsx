@@ -12,15 +12,17 @@ import {
   type SaveEntry,
 } from '../domain/entries';
 import { getEntry, saveEntry } from '../data/knowledge';
-import Markdown from 'react-markdown';
+import { EntryBody } from './EntryBody';
 import { EntryContextDetails } from './EntryContextDetails';
 import { EntryImage } from './EntryImage';
 import { uploadImage, imageTypes, maxImageBytes } from '../data/images';
+import { useLinkPicker } from './useLinkPicker';
 
 type Props = {
   entry: Entry | null;
   initialKind?: string;
   initialSpace?: Space;
+  initialTitle?: string;
   availableKinds?: string[];
   onSaved: (entry: Entry) => void;
   onClose: () => void;
@@ -32,6 +34,7 @@ export function Editor({
   entry,
   initialKind = 'note',
   initialSpace = 'personal',
+  initialTitle = '',
   availableKinds = [],
   onSaved,
   onClose,
@@ -46,7 +49,12 @@ export function Editor({
           kind: entry.kind,
           context: entryContext(entry.metadata),
         }
-      : { title: '', body: '', kind: initialKind, context: entryContext({ space: initialSpace }) },
+      : {
+          title: initialTitle,
+          body: '',
+          kind: initialKind,
+          context: entryContext({ space: initialSpace }),
+        },
   );
   const [tagInput, setTagInput] = useState('');
   const [pendingImages, setPendingImages] = useState<{ id: string; file: File; url: string }[]>([]);
@@ -67,9 +75,15 @@ export function Editor({
   const attempt = useRef<SaveEntry | null>(null);
   const entryId = useRef(entry?.id ?? crypto.randomUUID());
   const version = useRef(entry?.version ?? null);
+  const bodyField = useRef<HTMLTextAreaElement | null>(null);
+  const picker = useLinkPicker({
+    textarea: bodyField,
+    space: draft.context.space,
+    setBody: (body) => setDraft((current) => ({ ...current, body })),
+  });
   const uncertain = error?.code === 'unavailable' || error?.code === 'auth';
   const dirty =
-    draft.title !== (entry?.title ?? '') ||
+    draft.title !== (entry?.title ?? initialTitle) ||
     draft.body !== (entry?.body ?? '') ||
     draft.kind !== (entry?.kind ?? initialKind) ||
     tagInput.trim() !== '' ||
@@ -334,21 +348,59 @@ export function Editor({
               </button>
             </div>
             {preview && (
-              <div className="markdown draft-preview" aria-label="Entry preview">
-                <Markdown skipHtml>
-                  {draft.body || 'Your preview will appear here once you start writing.'}
-                </Markdown>
+              <div className="draft-preview" aria-label="Entry preview">
+                <EntryBody
+                  body={draft.body || 'Your preview will appear here once you start writing.'}
+                />
               </div>
             )}
             <textarea
+              ref={bodyField}
               hidden={preview}
               id="entry-body"
               placeholder="A line you read. A thought you had. Something to come back to…"
               value={draft.body}
               maxLength={1_000_000}
-              onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+              onChange={(e) => {
+                setDraft({ ...draft, body: e.target.value });
+                picker.sync();
+              }}
+              onKeyDown={picker.onKeyDown}
+              onKeyUp={picker.sync}
+              onClick={picker.sync}
               rows={10}
             />
+            {picker.open && !preview && (
+              <div className="link-options">
+                <p className="small muted" role="status">
+                  {picker.status === 'searching'
+                    ? 'Searching your entries…'
+                    : picker.options.length === 0
+                      ? 'No entry matches. Keep typing and close with ]] to leave a ghost link.'
+                      : `${picker.options.length} ${picker.options.length === 1 ? 'entry' : 'entries'} · Enter to link`}
+                </p>
+                {picker.options.length > 0 && (
+                  <ul role="listbox" aria-label="Link to an entry">
+                    {picker.options.map((option, index) => (
+                      <li
+                        key={option.id}
+                        role="option"
+                        aria-selected={index === picker.active}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          picker.choose(option);
+                        }}
+                      >
+                        <span className="type-label" data-color={labelColor(option.kind, 'entry')}>
+                          {option.kind}
+                        </span>
+                        {option.title}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <section className="image-fields" aria-labelledby="images-heading">
               <div className="context-heading">
                 <h3 id="images-heading">Images</h3>

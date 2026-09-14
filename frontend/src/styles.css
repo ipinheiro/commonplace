@@ -2075,6 +2075,31 @@ kbd {
 .markdown pre {
   overflow-x: auto;
 }
+.ghost-link {
+  display: inline;
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  border-bottom: 1px dotted var(--muted);
+  border-radius: 0;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  cursor: pointer;
+}
+.ghost-link:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.backlinks {
+  margin-top: 40px;
+}
+.backlinks .entry-list {
+  margin-top: 12px;
+}
+.backlinks .entry-card {
+  padding-block: 12px;
+}
 code,
 pre {
   font-family: var(--font);
@@ -2873,4 +2898,35 @@ fieldset label:not(:first-child) {
   .space-card {
     padding: 24px;
   }
+}
+.link-options {
+  margin-top: 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.link-options p {
+  margin: 0;
+  padding: 8px 12px;
+}
+.link-options ul {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.link-options li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.link-options li[aria-selected='true'],
+.link-options li:hover {
+  background: var(--accent-wash);
+  color: var(--accent);
 }

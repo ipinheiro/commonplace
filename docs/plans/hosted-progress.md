@@ -19,6 +19,8 @@ The [hosted architecture](2026-09-11-hosted-commonplace-design.md) is the active
 - [x] Export script writes entries and images to a local folder; verified against production on 2026-09-13 after applying the sort-order migration the hosted project was missing.
 - [x] Entry delete tombstones the row through `api.delete_entry` with a two-step button in the reader; 3 database and 3 UI tests. The hosted project needs the delete migration applied before deploying.
 - [x] Delete deployed on 2026-09-14: migration applied to both Supabase projects, delete tried on a preview, production deployed from develop and all 15 browser checks passed against it. Vercel Authentication had come to cover the production address and was set back to previews only.
+- [x] Links and backlinks: `[[` picker, rendered links, ghosts that become entries, "Linked from" list; 8 database, 7 transform, 3 reader and 3 editor tests plus 1 browser test. Migration applied to both Supabase projects.
+- [x] Links deployed on 2026-09-14: tried on a preview, one card-excerpt fix, production deployed from develop, the original address repointed, and all 16 browser checks passed against it.
 - [ ] User confirmed home screen installation (phone browser access already confirmed).
 - [ ] Supabase Auth Site URL updated to the production address (user step).
 

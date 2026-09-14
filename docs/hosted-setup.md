@@ -83,7 +83,7 @@ For a fresh checkout, first sign in with `bunx vercel@59.16.0 login` and link th
 
 ### Preview environment
 
-Vercel's Preview environment is the dev environment. It has its own Supabase project, set through the Preview values of the same two variables, so it holds separate accounts and entries. Every migration has to be applied in both projects' SQL Editors; the app, the export and the connection check follow whichever project `frontend/.env.local` names. To check that a project has a function without signing in, call it anonymously with that environment's publishable key: `42501` means the function exists and refused the anonymous caller, `PGRST202` means the migration is missing.
+Vercel's Preview environment is the dev environment. It has its own Supabase project, set through the Preview values of the same two variables, so it holds separate accounts and entries. Every migration has to be applied in both projects' SQL Editors; the app, the export and the connection check follow whichever project `frontend/.env.local` names. To check that a project has a function without signing in, call it anonymously with that environment's publishable key: `42501` means the function exists and refused the anonymous caller, `PGRST202` means the migration is missing. The links migration (`202609140008_entry_links.sql`) was applied to both projects on the day links shipped.
 
 Deploy a preview from the linked workspace with:
 
